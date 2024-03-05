@@ -20,7 +20,7 @@ def test_WeisfeilerLemanLabelingTree_init(dataset_name: str, depth: int, n_nodes
     assert wwllt.n_nodes == n_nodes
 
 
-def test_WeisfeilerLemanLabelingTree_calc_distance():
+def test_WeisfeilerLemanLabelingTree_calc_distributionance():
     wwllt = WeisfeilerLemanLabelingTree("MUTAG", 4)
     graph1 = [wwllt.data[0], wwllt.data[1], wwllt.data[2]]
     graph2 = [wwllt.data[3], wwllt.data[4], wwllt.data[5]]

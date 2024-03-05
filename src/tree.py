@@ -27,7 +27,7 @@ class WeisfeilerLemanLabelingTree:
             |-- _adjancy_list
 
         calc_distance
-        |-- _calc_dist_on_tree
+        |-- _calc_distribution_on_tree
         |   |-- _adjancy_list
         |-- _calc_subtree_weight
     """
@@ -130,7 +130,9 @@ class WeisfeilerLemanLabelingTree:
         # weight
         self.weight: torch.Tensor = torch.ones(self.n_nodes, dtype=torch.float32)
 
-    def _calc_dist_on_tree(self, graph: torch_geometric.data.Data) -> torch.Tensor:
+    def _calc_distribution_on_tree(
+        self, graph: torch_geometric.data.Data
+    ) -> torch.Tensor:
         """calculate distribution on WWLLT
 
         Args:
@@ -193,10 +195,10 @@ class WeisfeilerLemanLabelingTree:
             torch.Tensor: list of distances
         """
         dist_1 = [
-            self._calc_dist_on_tree(g) for g in graph1
+            self._calc_distribution_on_tree(g) for g in graph1
         ]  # (batch_size, self.n_nodes)
         dist_2 = [
-            self._calc_dist_on_tree(g) for g in graph2
+            self._calc_distribution_on_tree(g) for g in graph2
         ]  # (batch_size, self.n_nodes)
         weight_1 = torch.stack(
             [self._calc_subtree_weight(d) for d in dist_1], dim=0
