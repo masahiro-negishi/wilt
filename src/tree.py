@@ -183,6 +183,15 @@ class WeisfeilerLemanLabelingTree:
         graph1: list[torch_geometric.data.Data],
         graph2: list[torch_geometric.data.Data],
     ) -> torch.Tensor:
+        """calculate distance between two graphs (batch execution)
+
+        Args:
+            graph1 (list[torch_geometric.data.Data]): list of graphs
+            graph2 (list[torch_geometric.data.Data]): list of graphs
+
+        Returns:
+            torch.Tensor: list of distances
+        """
         dist_1 = [
             self._calc_dist_on_tree(g) for g in graph1
         ]  # (batch_size, self.n_nodes)
