@@ -7,6 +7,7 @@ from sklearn.manifold import TSNE  # type: ignore
 from sklearn.metrics import silhouette_score  # type: ignore
 
 from tree import WeisfeilerLemanLabelingTree
+from utils import dataset_to_distance_matrix
 
 
 def tSNE(
@@ -19,22 +20,7 @@ def tSNE(
         data (torch_geometric.datasets): Dataset
         path (str): Path to save tSNE visualization
     """
-    dists = torch.stack(
-        [tree._calc_distribution_on_tree(graph) for graph in data],
-        dim=0,
-    )
-    subtree_weights = torch.vmap(tree._calc_subtree_weight)(dists)
-    distances = torch.tensor(
-        [
-            [
-                tree.calc_distance_between_subtree_weights(
-                    subtree_weights[i], subtree_weights[j]
-                ).item()
-                for j in range(len(data))
-            ]
-            for i in range(len(data))
-        ]
-    )
+    distances = dataset_to_distance_matrix(tree, data)
     embedding = TSNE(
         n_components=2,
         metric="precomputed",
@@ -58,22 +44,15 @@ def intra_inter_distance(
         data (torch_geometric.datasets): Dataset
         path (str): Path to save intra and inter distance visualization
     """
-    dists = torch.stack(
-        [tree._calc_distribution_on_tree(graph) for graph in data],
-        dim=0,
-    )
-    subtree_weights = torch.vmap(tree._calc_subtree_weight)(dists)
+    distances = dataset_to_distance_matrix(tree, data)
     intra_distances = []
     inter_distances = []
     for i in range(len(data)):
         for j in range(i + 1, len(data)):
-            d = tree.calc_distance_between_subtree_weights(
-                subtree_weights[i], subtree_weights[j]
-            ).item()
             if data[i].y == data[j].y:
-                intra_distances.append(d)
+                intra_distances.append(distances[i, j].item())
             else:
-                inter_distances.append(d)
+                inter_distances.append(distances[i, j].item())
 
     # histogram
     left = math.floor(min(min(intra_distances), min(inter_distances)))
@@ -115,22 +94,7 @@ def silhouette_coefficient(
     Returns:
         float: [-1, 1]. The best value is 1 and the worst value is -1.
     """
-    dists = torch.stack(
-        [tree._calc_distribution_on_tree(graph) for graph in data],
-        dim=0,
-    )
-    subtree_weights = torch.vmap(tree._calc_subtree_weight)(dists)
-    distances = torch.tensor(
-        [
-            [
-                tree.calc_distance_between_subtree_weights(
-                    subtree_weights[i], subtree_weights[j]
-                ).item()
-                for j in range(len(data))
-            ]
-            for i in range(len(data))
-        ]
-    )
+    distances = dataset_to_distance_matrix(tree, data)
     score = silhouette_score(
         distances, labels=data.y, metric="precomputed", random_state=0
     )
