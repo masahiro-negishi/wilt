@@ -11,9 +11,6 @@ class WeisfeilerLemanLabelingTree:
     """Weisfeiler Leman Labeling Tree
 
     Attributes:
-        dataset_name (str): Name of dataset
-        dataset_root (str): Root directory of dataset
-        data (TUDataset): Dataset
         depth (int): Number of layers in WWLLT
         n_nodes (int): Number of nodes in WWLLT
         parent (list[int]): Parent node of each node in WWLLT
@@ -32,19 +29,16 @@ class WeisfeilerLemanLabelingTree:
         |-- _calc_subtree_weight
     """
 
-    def __init__(self, dataset_name: str, depth: int) -> None:
+    def __init__(self, data: torch_geometric.datasets, depth: int) -> None:
         """initialize WWLLT
 
         Args:
-            dataset_name (str): e.g. "MUTAG"
+            data (torch_geometric.datasets): Dataset
             depth (int): Number of layers in WWLLT
         """
-        self.dataset_name = dataset_name
-        self.dataset_root = os.path.join(DATA_DIR, "TUDataset")
-        self.data = TUDataset(root=self.dataset_root, name=self.dataset_name)
         self.depth = depth
         assert self.depth > 0, "Depth should be greater than 0"
-        self._build_tree()
+        self._build_tree(data)
 
     def _adjancy_list(self, graph: torch_geometric.data.Data) -> list[list[int]]:
         """convert edge_index to adjancy list
@@ -60,7 +54,7 @@ class WeisfeilerLemanLabelingTree:
             adj_list[u].append(v)
         return adj_list
 
-    def _build_tree(self) -> None:
+    def _build_tree(self, data) -> None:
         """Build WWLLT tree"""
         cnt_nodes: list[int] = [
             0 for _ in range(self.depth + 1)
@@ -74,7 +68,7 @@ class WeisfeilerLemanLabelingTree:
         ]  # labeling_hash[i] = dict of labelings in layer i (labeling_hash[0] is not used)
 
         # iterate over dataset # O(|G| * (|E| + self.depth * |V| * log|E|))
-        for g in self.data:
+        for g in data:
             # initial labeling # O(|V|)
             current_labeling: list[int] = [-1 for _ in range(g.num_nodes)]
             for node_idx, node_attr in enumerate(torch.argmax(g.x, dim=1)):
@@ -207,7 +201,3 @@ class WeisfeilerLemanLabelingTree:
             [self._calc_subtree_weight(d) for d in dist_2], dim=0
         )  # (batch_size, self.n_nodes)
         return torch.abs(weight_1 - weight_2) @ self.weight  # (batch_size,)
-
-
-if __name__ == "__main__":
-    wwllt = WeisfeilerLemanLabelingTree(dataset_name="MUTAG", depth=3)
