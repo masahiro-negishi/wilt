@@ -1,7 +1,7 @@
 import os
 
 import torch
-import torch_geometric.data  # type: ignore
+from torch_geometric.data import Batch, Data, Dataset  # type: ignore
 from torch_geometric.datasets import TUDataset  # type: ignore
 
 from path import DATA_DIR
@@ -29,22 +29,22 @@ class WeisfeilerLemanLabelingTree:
         |-- _calc_subtree_weight
     """
 
-    def __init__(self, data: torch_geometric.datasets, depth: int) -> None:
+    def __init__(self, data: Dataset, depth: int) -> None:
         """initialize WWLLT
 
         Args:
-            data (torch_geometric.datasets): Dataset
+            data (Dataset): Dataset
             depth (int): Number of layers in WWLLT
         """
         self.depth = depth
         assert self.depth > 0, "Depth should be greater than 0"
         self._build_tree(data)
 
-    def _adjancy_list(self, graph: torch_geometric.data.Data) -> list[list[int]]:
+    def _adjancy_list(self, graph: Data) -> list[list[int]]:
         """convert edge_index to adjancy list
 
         Args:
-            graph (torch_geometric.data.Data): graph
+            graph (Data): graph
 
         Returns:
             list[list[int]]: adjancy list
@@ -124,13 +124,11 @@ class WeisfeilerLemanLabelingTree:
         # weight
         self.weight: torch.Tensor = torch.ones(self.n_nodes, dtype=torch.float32)
 
-    def _calc_distribution_on_tree(
-        self, graph: torch_geometric.data.Data
-    ) -> torch.Tensor:
+    def _calc_distribution_on_tree(self, graph: Data) -> torch.Tensor:
         """calculate distribution on WWLLT
 
         Args:
-            graph (torch_geometric.data.Data): graph
+            graph (Data): graph
 
         Returns:
             torch.Tensor: distribution on WWLLT
@@ -207,34 +205,22 @@ class WeisfeilerLemanLabelingTree:
 
     def calc_distance_between_graphs(
         self,
-        graph1: (
-            torch_geometric.data.Data
-            | torch_geometric.data.Batch
-            | list[torch_geometric.data.Data]
-        ),
-        graph2: (
-            torch_geometric.data.Data
-            | torch_geometric.data.Batch
-            | list[torch_geometric.data.Data]
-        ),
+        graph1: Data | Batch | list[Data],
+        graph2: Data | Batch | list[Data],
     ) -> torch.Tensor:
         """calculate distance between two graphs
 
         Args:
-            graph1 (torch_geometric.data.Data | torch_geometric.data.Batch): graph(s)
-            graph2 (torch_geometric.data.Data | torch_geometric.data.Batch): graph(s)
+            graph1 (Data | Batch): graph(s)
+            graph2 (Data | Batch): graph(s)
 
         Returns:
             torch.Tensor: distance(s)
         """
-        if isinstance(graph1, torch_geometric.data.Data) and isinstance(
-            graph2, torch_geometric.data.Data
-        ):
+        if isinstance(graph1, Data) and isinstance(graph2, Data):
             graph1 = [graph1]
             graph2 = [graph2]
-        elif isinstance(graph1, torch_geometric.data.Batch) and isinstance(
-            graph2, torch_geometric.data.Batch
-        ):
+        elif isinstance(graph1, Batch) and isinstance(graph2, Batch):
             graph1 = graph1.to_data_list()
             graph2 = graph2.to_data_list()
         dist1 = torch.stack(

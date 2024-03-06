@@ -1,15 +1,12 @@
-import os
 from typing import Optional
 
 import matplotlib.pyplot as plt  # type: ignore
 import networkx as nx  # type: ignore
-import numpy as np
 import torch
-import torch_geometric.data  # type: ignore
 import torch_geometric.utils as utils  # type: ignore
 from sklearn.manifold import TSNE  # type: ignore
+from torch_geometric.data import Data  # type: ignore
 
-from path import DATA_DIR, RESULTS_DIR
 from tree import WeisfeilerLemanLabelingTree
 
 
@@ -43,7 +40,7 @@ def visualize_WLLT(
 
 
 def visualize_graph(
-    graph: torch_geometric.data.Data,
+    graph: Data,
     path: str,
     node_dict: Optional[dict] = None,
     edge_dict: Optional[dict] = None,
@@ -51,7 +48,7 @@ def visualize_graph(
     """visualize graph
 
     Args:
-        graph (torch_geometric.data.Data): graph
+        graph (Data): graph
         path (str): Path to save image
         node_dict (Optional[dict]): Convert node attribute from integer. Defaults to None.
         edge_dict (Optional[dict]): Convert edge attribute from integer. Defaults to None.
@@ -81,23 +78,4 @@ def visualize_graph(
         pos,
         edge_labels=nx.get_edge_attributes(nx_graph, "label"),
     )
-    plt.savefig(path)
-
-
-def tSNE(
-    tree: WeisfeilerLemanLabelingTree, data: torch_geometric.datasets, path: str
-) -> None:
-    dists = torch.stack(
-        [tree._calc_distribution_on_tree(graph) for graph in data],
-        dim=0,
-    )
-    embedding = TSNE(
-        n_components=2,
-        metric=lambda d0, d1: tree.calc_distance_between_dists(
-            torch.from_numpy(d0), torch.from_numpy(d1)
-        ).item(),
-    ).fit_transform(dists)
-
-    plt.figure(figsize=(10, 10))
-    plt.scatter(embedding[:, 0], embedding[:, 1], c=data.y)
     plt.savefig(path)
