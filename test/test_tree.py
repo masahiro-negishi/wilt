@@ -3,7 +3,7 @@ import sys
 
 import pytest
 import torch
-from torch_geometric.data import Data
+from torch_geometric.data import Data  # type: ignore
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "../src"))
 from tree import WeisfeilerLemanLabelingTree  # type: ignore
