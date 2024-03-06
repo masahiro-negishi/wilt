@@ -174,30 +174,73 @@ class WeisfeilerLemanLabelingTree:
             weight[self.parent[node_idx]] += weight[node_idx]
         return weight
 
-    def calc_distance(
+    def calc_distance_between_dists(
         self,
-        graph1: list[torch_geometric.data.Data],
-        graph2: list[torch_geometric.data.Data],
+        dist1: torch.Tensor,
+        dist2: torch.Tensor,
     ) -> torch.Tensor:
-        """calculate distance between two graphs (batch execution)
+        """calculate distance between two distributions on WWLLT
 
         Args:
-            graph1 (list[torch_geometric.data.Data]): list of graphs
-            graph2 (list[torch_geometric.data.Data]): list of graphs
+            dist1 (torch.Tensor): distribution(s) on WWLLT
+            dist2 (torch.Tensor): distribution(s) on WWLLT
 
         Returns:
-            torch.Tensor: list of distances
+            torch.Tensor: distance(s)
         """
-        dist_1 = [
-            self._calc_distribution_on_tree(g) for g in graph1
-        ]  # (batch_size, self.n_nodes)
-        dist_2 = [
-            self._calc_distribution_on_tree(g) for g in graph2
-        ]  # (batch_size, self.n_nodes)
-        weight_1 = torch.stack(
-            [self._calc_subtree_weight(d) for d in dist_1], dim=0
+        if len(dist1.shape) == 1:
+            return torch.dot(
+                torch.abs(
+                    self._calc_subtree_weight(dist1) - self._calc_subtree_weight(dist2)
+                ),
+                self.weight,
+            )  # (1, )
+        else:
+            # batch execution
+            weight1 = torch.stack(
+                [self._calc_subtree_weight(d) for d in dist1], dim=0
+            )  # (batch_size, self.n_nodes)
+            weight2 = torch.stack(
+                [self._calc_subtree_weight(d) for d in dist2], dim=0
+            )  # (batch_size, self.n_nodes)
+            return torch.abs(weight1 - weight2) @ self.weight  # (batch_size,)
+
+    def calc_distance_between_graphs(
+        self,
+        graph1: (
+            torch_geometric.data.Data
+            | torch_geometric.data.Batch
+            | list[torch_geometric.data.Data]
+        ),
+        graph2: (
+            torch_geometric.data.Data
+            | torch_geometric.data.Batch
+            | list[torch_geometric.data.Data]
+        ),
+    ) -> torch.Tensor:
+        """calculate distance between two graphs
+
+        Args:
+            graph1 (torch_geometric.data.Data | torch_geometric.data.Batch): graph(s)
+            graph2 (torch_geometric.data.Data | torch_geometric.data.Batch): graph(s)
+
+        Returns:
+            torch.Tensor: distance(s)
+        """
+        if isinstance(graph1, torch_geometric.data.Data) and isinstance(
+            graph2, torch_geometric.data.Data
+        ):
+            graph1 = [graph1]
+            graph2 = [graph2]
+        elif isinstance(graph1, torch_geometric.data.Batch) and isinstance(
+            graph2, torch_geometric.data.Batch
+        ):
+            graph1 = graph1.to_data_list()
+            graph2 = graph2.to_data_list()
+        dist1 = torch.stack(
+            [self._calc_distribution_on_tree(g) for g in graph1], dim=0
         )  # (batch_size, self.n_nodes)
-        weight_2 = torch.stack(
-            [self._calc_subtree_weight(d) for d in dist_2], dim=0
+        dist2 = torch.stack(
+            [self._calc_distribution_on_tree(g) for g in graph2], dim=0
         )  # (batch_size, self.n_nodes)
-        return torch.abs(weight_1 - weight_2) @ self.weight  # (batch_size,)
+        return self.calc_distance_between_dists(dist1, dist2)
