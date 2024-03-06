@@ -3,11 +3,13 @@ from typing import Optional
 
 import matplotlib.pyplot as plt  # type: ignore
 import networkx as nx  # type: ignore
+import numpy as np
 import torch
 import torch_geometric.data  # type: ignore
 import torch_geometric.utils as utils  # type: ignore
+from sklearn.manifold import TSNE  # type: ignore
 
-from path import RESULTS_DIR
+from path import DATA_DIR, RESULTS_DIR
 from tree import WeisfeilerLemanLabelingTree
 
 
@@ -82,11 +84,20 @@ def visualize_graph(
     plt.savefig(path)
 
 
-if __name__ == "__main__":
-    tree = WeisfeilerLemanLabelingTree("MUTAG", 1)
-    # visualize_WLLT(tree, os.path.join(RESULTS_DIR, "WLLT.png"), withweight=True)
-    visualize_graph(
-        tree.data[0],
-        os.path.join(RESULTS_DIR, "graph.png"),
-        {0: "C", 1: "N", 2: "O", 3: "F", 4: "I", 5: "Cl", 6: "Br"},
+def tSNE(
+    tree: WeisfeilerLemanLabelingTree, data: torch_geometric.datasets, path: str
+) -> None:
+    dists = torch.stack(
+        [tree._calc_distribution_on_tree(graph) for graph in data],
+        dim=0,
     )
+    embedding = TSNE(
+        n_components=2,
+        metric=lambda d0, d1: tree.calc_distance_between_dists(
+            torch.from_numpy(d0), torch.from_numpy(d1)
+        ).item(),
+    ).fit_transform(dists)
+
+    plt.figure(figsize=(10, 10))
+    plt.scatter(embedding[:, 0], embedding[:, 1], c=data.y)
+    plt.savefig(path)
