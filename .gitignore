@@ -1,5 +1,8 @@
 lwwllt_env/
+
 data/
+rslt/
+
 __pycache__/
 .mypy_cache/
 .pytest_cache/

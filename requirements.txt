@@ -8,3 +8,4 @@ torch==2.2.0+cu118
 torchvision==0.17.0+cu118
 torch_geometric==2.5.0
 pytest==7.4.4
+matplotlib==3.7.5

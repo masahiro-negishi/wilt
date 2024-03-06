@@ -12,6 +12,7 @@ from tree import WeisfeilerLemanLabelingTree  # type: ignore
 @pytest.mark.parametrize(
     "dataset_name, depth, n_nodes",
     [
+        ("MUTAG", 2, 7 + 33 + 174),
         ("MUTAG", 4, 7 + 33 + 174 + 572 + 1197),
     ],
 )
@@ -20,7 +21,13 @@ def test_WeisfeilerLemanLabelingTree_init(dataset_name: str, depth: int, n_nodes
     assert wwllt.n_nodes == n_nodes
 
 
-def test_WeisfeilerLemanLabelingTree_calc_distributionance():
+@pytest.mark.parametrize(
+    "dataset_name, depth",
+    [("MUTAG", 1), ("MUTAG", 3)],
+)
+def test_WeisfeilerLemanLabelingTree_calc_distributionance(
+    dataset_name: str, depth: int
+):
     wwllt = WeisfeilerLemanLabelingTree("MUTAG", 4)
     graph1 = [wwllt.data[0], wwllt.data[1], wwllt.data[2]]
     graph2 = [wwllt.data[3], wwllt.data[4], wwllt.data[5]]
