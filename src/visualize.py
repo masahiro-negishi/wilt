@@ -37,6 +37,7 @@ def visualize_WLLT(
             edge_labels=nx.get_edge_attributes(nx_tree, "weight"),
         )
     plt.savefig(path)
+    plt.close()
 
 
 def visualize_graph(
@@ -79,3 +80,4 @@ def visualize_graph(
         edge_labels=nx.get_edge_attributes(nx_graph, "label"),
     )
     plt.savefig(path)
+    plt.close()

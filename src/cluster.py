@@ -23,3 +23,4 @@ def tSNE(
     plt.figure(figsize=(10, 10))
     plt.scatter(embedding[:, 0], embedding[:, 1], c=data.y)
     plt.savefig(path)
+    plt.close()
