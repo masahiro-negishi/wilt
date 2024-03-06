@@ -23,10 +23,11 @@ class WeisfeilerLemanLabelingTree:
         |-- _build_tree
             |-- _adjancy_list
 
-        calc_distance
+        calc_distance_between_graphs
         |-- _calc_distribution_on_tree
-        |   |-- _adjancy_list
-        |-- _calc_subtree_weight
+        |-- calc_distance_between_dists
+            |-- _calc_subtree_weight
+            |-- calc_distance_between_subtree_weights
     """
 
     def __init__(self, data: Dataset, depth: int) -> None:
@@ -55,7 +56,11 @@ class WeisfeilerLemanLabelingTree:
         return adj_list
 
     def _build_tree(self, data) -> None:
-        """Build WWLLT tree"""
+        """Build WWLLT tree
+
+        Args:
+            data (Dataset): Dataset
+        """
         cnt_nodes: list[int] = [
             0 for _ in range(self.depth + 1)
         ]  # cnt_nodes[i] = number of nodes in layer [i] (The layer of root node is -1)
@@ -172,6 +177,29 @@ class WeisfeilerLemanLabelingTree:
             weight[self.parent[node_idx]] += weight[node_idx]
         return weight
 
+    def calc_distance_between_subtree_weights(
+        self,
+        weight1: torch.Tensor,
+        weight2: torch.Tensor,
+    ) -> torch.Tensor:
+        """calculate distance between two distributions on WWLLT
+
+        Args:
+            weight1 (torch.Tensor): subtree_weight vector(s)
+            weight2 (torch.Tensor): subtree_weight vector(s)
+
+        Returns:
+            torch.Tensor: distance(s)
+        """
+        if len(weight1.shape) == 1:
+            return torch.dot(
+                torch.abs(weight1 - weight2),
+                self.weight,
+            )  # (1, )
+        else:
+            # batch execution
+            return torch.abs(weight1 - weight2) @ self.weight  # (batch_size,)
+
     def calc_distance_between_dists(
         self,
         dist1: torch.Tensor,
@@ -187,21 +215,14 @@ class WeisfeilerLemanLabelingTree:
             torch.Tensor: distance(s)
         """
         if len(dist1.shape) == 1:
-            return torch.dot(
-                torch.abs(
-                    self._calc_subtree_weight(dist1) - self._calc_subtree_weight(dist2)
-                ),
-                self.weight,
-            )  # (1, )
+            return self.calc_distance_between_subtree_weights(
+                self._calc_subtree_weight(dist1), self._calc_subtree_weight(dist2)
+            )
         else:
-            # batch execution
-            weight1 = torch.stack(
-                [self._calc_subtree_weight(d) for d in dist1], dim=0
-            )  # (batch_size, self.n_nodes)
-            weight2 = torch.stack(
-                [self._calc_subtree_weight(d) for d in dist2], dim=0
-            )  # (batch_size, self.n_nodes)
-            return torch.abs(weight1 - weight2) @ self.weight  # (batch_size,)
+            return self.calc_distance_between_subtree_weights(
+                torch.vmap(self._calc_subtree_weight)(dist1),
+                torch.vmap(self._calc_subtree_weight)(dist2),
+            )
 
     def calc_distance_between_graphs(
         self,
