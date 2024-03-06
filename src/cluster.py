@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt  # type: ignore
 import torch
 import torch_geometric.datasets  # type: ignore
 from sklearn.manifold import TSNE  # type: ignore
+from sklearn.metrics import silhouette_score  # type: ignore
 
 from tree import WeisfeilerLemanLabelingTree
 
@@ -22,12 +23,24 @@ def tSNE(
         [tree._calc_distribution_on_tree(graph) for graph in data],
         dim=0,
     )
+    subtree_weights = torch.vmap(tree._calc_subtree_weight)(dists)
+    distances = torch.tensor(
+        [
+            [
+                tree.calc_distance_between_subtree_weights(
+                    subtree_weights[i], subtree_weights[j]
+                ).item()
+                for j in range(len(data))
+            ]
+            for i in range(len(data))
+        ]
+    )
     embedding = TSNE(
         n_components=2,
-        metric=lambda d0, d1: tree.calc_distance_between_dists(
-            torch.from_numpy(d0), torch.from_numpy(d1)
-        ).item(),
-    ).fit_transform(dists)
+        metric="precomputed",
+        init="random",
+        random_state=0,
+    ).fit_transform(distances)
 
     plt.figure(figsize=(10, 10))
     plt.scatter(embedding[:, 0], embedding[:, 1], c=data.y)
@@ -81,3 +94,29 @@ def intra_inter_distance(
     )
     plt.savefig(path)
     plt.close()
+
+
+def silhouette_coefficient(
+    tree: WeisfeilerLemanLabelingTree, data: torch_geometric.datasets
+) -> float:
+    dists = torch.stack(
+        [tree._calc_distribution_on_tree(graph) for graph in data],
+        dim=0,
+    )
+    subtree_weights = torch.vmap(tree._calc_subtree_weight)(dists)
+    distances = torch.tensor(
+        [
+            [
+                tree.calc_distance_between_subtree_weights(
+                    subtree_weights[i], subtree_weights[j]
+                ).item()
+                for j in range(len(data))
+            ]
+            for i in range(len(data))
+        ]
+    )
+    score = silhouette_score(
+        distances, labels=data.y, metric="precomputed", random_state=0
+    )
+    print(f"Silhouette Coefficient: {score}")
+    return score

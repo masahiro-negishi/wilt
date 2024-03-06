@@ -1,2 +1,2 @@
 DATA_DIR = "/home/negi/Research/lwwllt/data"
-RESULTS_DIR = "/home/negi/Research/lwwllt/rslt"
+RESULT_DIR = "/home/negi/Research/lwwllt/rslt"
