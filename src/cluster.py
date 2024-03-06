@@ -51,6 +51,13 @@ def tSNE(
 def intra_inter_distance(
     tree: WeisfeilerLemanLabelingTree, data: torch_geometric.datasets, path: str
 ) -> None:
+    """visualize distribution of intra and inter distances
+
+    Args:
+        tree (WeisfeilerLemanLabelingTree): WLLT
+        data (torch_geometric.datasets): Dataset
+        path (str): Path to save intra and inter distance visualization
+    """
     dists = torch.stack(
         [tree._calc_distribution_on_tree(graph) for graph in data],
         dim=0,
@@ -99,6 +106,15 @@ def intra_inter_distance(
 def silhouette_coefficient(
     tree: WeisfeilerLemanLabelingTree, data: torch_geometric.datasets
 ) -> float:
+    """Silhouette coefficient
+
+    Args:
+        tree (WeisfeilerLemanLabelingTree): WLLT
+        data (torch_geometric.datasets): Dataset
+
+    Returns:
+        float: [-1, 1]. The best value is 1 and the worst value is -1.
+    """
     dists = torch.stack(
         [tree._calc_distribution_on_tree(graph) for graph in data],
         dim=0,
