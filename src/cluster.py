@@ -98,5 +98,4 @@ def silhouette_coefficient(
     score = silhouette_score(
         distances, labels=data.y, metric="precomputed", random_state=0
     )
-    print(f"Silhouette Coefficient: {score}")
     return score
