@@ -16,8 +16,8 @@ from tree import WeisfeilerLemanLabelingTree  # type: ignore
 )
 def test_tSNE(tmpdir, dataset_name, depth):
     data = TUDataset(root=os.path.join(DATA_DIR, "TUDataset"), name=dataset_name)
-    wwllt = WeisfeilerLemanLabelingTree(data, depth)
-    tSNE(wwllt, data, os.path.join(tmpdir, "test_tSNE.png"))
+    tree = WeisfeilerLemanLabelingTree(data, depth)
+    tSNE(tree, data, os.path.join(tmpdir, "test_tSNE.png"))
     os.remove(os.path.join(tmpdir, "test_tSNE.png"))
 
 
@@ -27,9 +27,9 @@ def test_tSNE(tmpdir, dataset_name, depth):
 )
 def test_intra_inter_distance(tmpdir, dataset_name, depth):
     data = TUDataset(root=os.path.join(DATA_DIR, "TUDataset"), name=dataset_name)
-    wwllt = WeisfeilerLemanLabelingTree(data, depth)
+    tree = WeisfeilerLemanLabelingTree(data, depth)
     intra_inter_distance(
-        wwllt, data, os.path.join(tmpdir, "test_intra_inter_distance.png")
+        tree, data, os.path.join(tmpdir, "test_intra_inter_distance.png")
     )
     os.remove(os.path.join(tmpdir, "test_intra_inter_distance.png"))
 
@@ -40,5 +40,5 @@ def test_intra_inter_distance(tmpdir, dataset_name, depth):
 )
 def test_silhouette_coefficient(tmpdir, dataset_name, depth):
     data = TUDataset(root=os.path.join(DATA_DIR, "TUDataset"), name=dataset_name)
-    wwllt = WeisfeilerLemanLabelingTree(data, depth)
-    silhouette_coefficient(wwllt, data)
+    tree = WeisfeilerLemanLabelingTree(data, depth)
+    silhouette_coefficient(tree, data)

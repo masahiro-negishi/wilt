@@ -17,8 +17,8 @@ from visualize import visualize_graph, visualize_WLLT  # type: ignore
 )
 def test_visualize_WLLT(tmpdir, dataset_name: str, depth: int, withweight: bool):
     data = TUDataset(root=os.path.join(DATA_DIR, "TUDataset"), name=dataset_name)
-    wwllt = WeisfeilerLemanLabelingTree(data, depth)
-    visualize_WLLT(wwllt, os.path.join(tmpdir, "test_visualize_WLLT.png"), withweight)
+    tree = WeisfeilerLemanLabelingTree(data, depth)
+    visualize_WLLT(tree, os.path.join(tmpdir, "test_visualize_WLLT.png"), withweight)
     os.remove(os.path.join(tmpdir, "test_visualize_WLLT.png"))
 
 

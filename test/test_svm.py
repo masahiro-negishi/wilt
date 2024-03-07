@@ -16,8 +16,8 @@ from tree import WeisfeilerLemanLabelingTree  # type: ignore
 )
 def test_svm(tmpdir, dataset_name, depth):
     data = TUDataset(root=os.path.join(DATA_DIR, "TUDataset"), name=dataset_name)
-    wwllt = WeisfeilerLemanLabelingTree(data, depth)
-    _svm(wwllt, data[: len(data) // 2], data[len(data) // 2 :])
+    tree = WeisfeilerLemanLabelingTree(data, depth)
+    _svm(tree, data[: len(data) // 2], data[len(data) // 2 :])
 
 
 @pytest.mark.parametrize(
@@ -26,5 +26,5 @@ def test_svm(tmpdir, dataset_name, depth):
 )
 def test_svm_cross_validation(tmpdir, dataset_name, depth):
     data = TUDataset(root=os.path.join(DATA_DIR, "TUDataset"), name=dataset_name)
-    wwllt = WeisfeilerLemanLabelingTree(data, depth)
-    svm_cross_validation(wwllt, data)
+    tree = WeisfeilerLemanLabelingTree(data, depth)
+    svm_cross_validation(tree, data)
