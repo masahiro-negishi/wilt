@@ -28,15 +28,15 @@ def _svm(
     clf.fit(kernel_train, train_data.y)
 
     train_dists = torch.stack(
-        [tree._calc_distribution_on_tree(graph) for graph in train_data],
+        [tree.calc_distribution_on_tree(graph) for graph in train_data],
         dim=0,
     )
     test_dists = torch.stack(
-        [tree._calc_distribution_on_tree(graph) for graph in test_data],
+        [tree.calc_distribution_on_tree(graph) for graph in test_data],
         dim=0,
     )
-    train_subtree_weights = torch.vmap(tree._calc_subtree_weight)(train_dists)
-    test_subtree_weights = torch.vmap(tree._calc_subtree_weight)(test_dists)
+    train_subtree_weights = torch.vmap(tree.calc_subtree_weight)(train_dists)
+    test_subtree_weights = torch.vmap(tree.calc_subtree_weight)(test_dists)
     distances_test = torch.tensor(
         [
             [

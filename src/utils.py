@@ -17,10 +17,10 @@ def dataset_to_distance_matrix(
         torch.Tensor: distance matrix
     """
     dists = torch.stack(
-        [tree._calc_distribution_on_tree(graph) for graph in data],
+        [tree.calc_distribution_on_tree(graph) for graph in data],
         dim=0,
     )
-    subtree_weights = torch.vmap(tree._calc_subtree_weight)(dists)
+    subtree_weights = torch.vmap(tree.calc_subtree_weight)(dists)
     distances = torch.tensor(
         [
             [

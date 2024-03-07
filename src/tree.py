@@ -24,9 +24,9 @@ class WeisfeilerLemanLabelingTree:
             |-- _adjancy_list
 
         calc_distance_between_graphs
-        |-- _calc_distribution_on_tree
+        |-- calc_distribution_on_tree
         |-- calc_distance_between_dists
-            |-- _calc_subtree_weight
+            |-- calc_subtree_weight
             |-- calc_distance_between_subtree_weights
     """
 
@@ -129,7 +129,7 @@ class WeisfeilerLemanLabelingTree:
         # weight
         self.weight: torch.Tensor = torch.ones(self.n_nodes, dtype=torch.float32)
 
-    def _calc_distribution_on_tree(self, graph: Data) -> torch.Tensor:
+    def calc_distribution_on_tree(self, graph: Data) -> torch.Tensor:
         """calculate distribution on WWLLT
 
         Args:
@@ -163,7 +163,7 @@ class WeisfeilerLemanLabelingTree:
         dist /= graph.num_nodes
         return dist
 
-    def _calc_subtree_weight(self, dist: torch.Tensor) -> torch.Tensor:
+    def calc_subtree_weight(self, dist: torch.Tensor) -> torch.Tensor:
         """calculate weight of each subtree in WWLLT
 
         Args:
@@ -216,12 +216,12 @@ class WeisfeilerLemanLabelingTree:
         """
         if len(dist1.shape) == 1:
             return self.calc_distance_between_subtree_weights(
-                self._calc_subtree_weight(dist1), self._calc_subtree_weight(dist2)
+                self.calc_subtree_weight(dist1), self.calc_subtree_weight(dist2)
             )
         else:
             return self.calc_distance_between_subtree_weights(
-                torch.vmap(self._calc_subtree_weight)(dist1),
-                torch.vmap(self._calc_subtree_weight)(dist2),
+                torch.vmap(self.calc_subtree_weight)(dist1),
+                torch.vmap(self.calc_subtree_weight)(dist2),
             )
 
     def calc_distance_between_graphs(
@@ -245,9 +245,9 @@ class WeisfeilerLemanLabelingTree:
             graph1 = graph1.to_data_list()
             graph2 = graph2.to_data_list()
         dist1 = torch.stack(
-            [self._calc_distribution_on_tree(g) for g in graph1], dim=0
+            [self.calc_distribution_on_tree(g) for g in graph1], dim=0
         )  # (batch_size, self.n_nodes)
         dist2 = torch.stack(
-            [self._calc_distribution_on_tree(g) for g in graph2], dim=0
+            [self.calc_distribution_on_tree(g) for g in graph2], dim=0
         )  # (batch_size, self.n_nodes)
         return self.calc_distance_between_dists(dist1, dist2)
