@@ -16,18 +16,25 @@ class WeisfeilerLemanLabelingTree:
         parent (list[int]): Parent node of each node in WWLLT
         attr2label (dict[int, int]): Mapping from attribute to label (for layer 0)
         labeling_hash (dict[tuple[int, tuple[int, ...]], int]): Hash table of labelings (for layer 1 to layer depth)
-        weight (torch.Tensor): Weight of each node in WWLLT
+        parameter (torch.Tensor): Parameter of each edge in WWLLT
+
+    Properties:
+        weight (torch.Tensor): Weight of each edge in WWLLT
 
     Structure:
         __init__
         |-- _build_tree
             |-- _adjancy_list
 
+        weight
+
         calc_distance_between_graphs
         |-- calc_distribution_on_tree
         |-- calc_distance_between_dists
             |-- calc_subtree_weight
             |-- calc_distance_between_subtree_weights
+
+        load_parameter
     """
 
     def __init__(self, data: Dataset, depth: int) -> None:
@@ -127,7 +134,11 @@ class WeisfeilerLemanLabelingTree:
                 ]
 
         # weight
-        self.weight: torch.Tensor = torch.ones(self.n_nodes, dtype=torch.float32)
+        self.parameter: torch.Tensor = torch.zeros(self.n_nodes, dtype=torch.float32)
+
+    @property
+    def weight(self) -> torch.Tensor:
+        return torch.exp(self.parameter)
 
     def calc_distribution_on_tree(self, graph: Data) -> torch.Tensor:
         """calculate distribution on WWLLT
@@ -252,10 +263,10 @@ class WeisfeilerLemanLabelingTree:
         )  # (batch_size, self.n_nodes)
         return self.calc_distance_between_dists(dist1, dist2)
 
-    def load_weight(self, path: str) -> None:
-        """load weight from file
+    def load_parameter(self, path: str) -> None:
+        """load parameter from file
 
         Args:
             path (str): path to the file
         """
-        self.weight = torch.load(path)
+        self.parameter = torch.load(path)

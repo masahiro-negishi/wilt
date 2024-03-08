@@ -108,8 +108,8 @@ def train(
         loss_fn: nn.Module = TripletLoss(margin=kwargs["margin"])
     else:
         loss_fn = NCELoss(temperature=kwargs["temperature"])
-    tree.weight.requires_grad = True
-    optimizer = Adam([tree.weight], lr=lr)
+    tree.parameter.requires_grad = True
+    optimizer = Adam([tree.parameter], lr=lr)
 
     # train the model
     loss_hist = []
@@ -158,4 +158,4 @@ def train(
     plt.close()
 
     # save the model
-    torch.save(tree.weight, os.path.join(path, "model.pt"))
+    torch.save(tree.parameter, os.path.join(path, "model.pt"))
