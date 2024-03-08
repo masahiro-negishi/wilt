@@ -251,3 +251,11 @@ class WeisfeilerLemanLabelingTree:
             [self.calc_distribution_on_tree(g) for g in graph2], dim=0
         )  # (batch_size, self.n_nodes)
         return self.calc_distance_between_dists(dist1, dist2)
+
+    def load_weight(self, path: str) -> None:
+        """load weight from file
+
+        Args:
+            path (str): path to the file
+        """
+        self.weight = torch.load(path)
