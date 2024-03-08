@@ -133,11 +133,12 @@ def train(
     plt.plot(loss_hist)
     plt.xlabel("Epoch")
     plt.ylabel("Loss")
-    plt.yscale("log")
     plt.title(
         f"{dataset_name}, d={depth}, b={batch_size}, lr={lr}, m={kwargs['margin']}"
     )
     plt.savefig(os.path.join(path, "loss.png"))
+    plt.yscale("log")
+    plt.savefig(os.path.join(path, "loss_log.png"))
     plt.close()
 
     # save the model
