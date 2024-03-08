@@ -4,13 +4,14 @@ import random
 
 import matplotlib.pyplot as plt  # type: ignore
 import torch
+from torch import nn
 from torch.optim import Adam
 from torch.utils.data import Sampler
 from torch_geometric.data import Dataset  # type: ignore
 from torch_geometric.datasets import TUDataset  # type: ignore
 from torch_geometric.loader import DataLoader  # type: ignore
 
-from loss import TripletLoss
+from loss import NCELoss, TripletLoss
 from path import RESULT_DIR  # type: ignore
 from tree import WeisfeilerLemanLabelingTree
 
@@ -80,6 +81,7 @@ class TripletSampler(Sampler):
 def train(
     dataset_name: str,
     depth: int,
+    loss_name: str,
     batch_size: int,
     n_epochs: int,
     lr: float,
@@ -91,6 +93,7 @@ def train(
     Args:
         dataset_name (str): dataset name
         depth (int): number of layers in the WLLT
+        loss_name (str): name of the loss function
         batch_size (int): batch size
         n_epochs (int): number of epochs
         lr (float): learning rate
@@ -101,7 +104,10 @@ def train(
     data = TUDataset(root="data/TUDataset", name=dataset_name)
     tree = WeisfeilerLemanLabelingTree(data, depth)
     sampler = TripletSampler(data, batch_size)
-    loss_fn = TripletLoss(margin=kwargs["margin"], n_classes=len(torch.unique(data.y)))
+    if loss_name == "triplet":
+        loss_fn: nn.Module = TripletLoss(margin=kwargs["margin"])
+    else:
+        loss_fn = NCELoss(temperature=kwargs["temperature"])
     tree.weight.requires_grad = True
     optimizer = Adam([tree.weight], lr=lr)
 
@@ -134,6 +140,7 @@ def train(
         "n_epochs": n_epochs,
         "lr": lr,
         "loss_history": loss_hist,
+        "hyperparameters": kwargs,
     }
     for key, val in kwargs.items():
         info[key] = val
@@ -144,9 +151,7 @@ def train(
     plt.plot(loss_hist)
     plt.xlabel("Epoch")
     plt.ylabel("Loss")
-    plt.title(
-        f"{dataset_name}, d={depth}, b={batch_size}, lr={lr}, m={kwargs['margin']}"
-    )
+    plt.title(f"{dataset_name}, d={depth}, b={batch_size}, lr={lr}, h={kwargs}")
     plt.savefig(os.path.join(path, "loss.png"))
     plt.yscale("log")
     plt.savefig(os.path.join(path, "loss_log.png"))

@@ -28,22 +28,44 @@ def test_TripletSampler(dataset_name: str, batch_size: int):
 
 
 @pytest.mark.parametrize(
-    "dataset_name, depth, batch_size, n_epochs, lr, margin",
+    "dataset_name, depth, loss_name, batch_size, n_epochs, lr, hyperparameter",
     [
-        ("MUTAG", 2, 10, 2, 0.01, 1),
-        ("MUTAG", 3, 20, 1, 0.001, 5),
+        ("MUTAG", 2, "triplet", 10, 2, 0.01, 1),
+        ("MUTAG", 3, "nce", 20, 1, 0.001, 1),
     ],
 )
 def test_train(
     tmpdir,
     dataset_name: str,
     depth: int,
+    loss_name: str,
     batch_size: int,
     n_epochs: int,
     lr: float,
-    margin: float,
+    hyperparameter: float,
 ):
-    train(dataset_name, depth, batch_size, n_epochs, lr, str(tmpdir), margin=margin)
+    if loss_name == "triplet":
+        train(
+            dataset_name,
+            depth,
+            loss_name,
+            batch_size,
+            n_epochs,
+            lr,
+            str(tmpdir),
+            margin=hyperparameter,
+        )
+    else:
+        train(
+            dataset_name,
+            depth,
+            loss_name,
+            batch_size,
+            n_epochs,
+            lr,
+            str(tmpdir),
+            temperature=hyperparameter,
+        )
     assert os.path.exists(os.path.join(str(tmpdir), "info.json"))
     assert os.path.exists(os.path.join(str(tmpdir), "loss.png"))
     assert os.path.exists(os.path.join(str(tmpdir), "loss_log.png"))

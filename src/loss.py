@@ -11,19 +11,16 @@ class TripletLoss(nn.Module):
 
     Attributes:
         margin (float): Margin
-        n_classes (int): Number of classes
     """
 
-    def __init__(self, margin: float, n_classes: int):
+    def __init__(self, margin: float):
         """initialize triplet loss function
 
         Args:
             margin (float): hyperparameter for triplet loss
-            n_classes (int): Number of classes
         """
         super().__init__()
         self.margin = margin
-        self.n_classes = n_classes
 
     def forward(
         self,
@@ -56,3 +53,49 @@ class TripletLoss(nn.Module):
                 torch.zeros_like(positive_distances),
             )
         )
+
+
+class NCELoss(nn.Module):
+    """NCE loss function
+
+    Attributes:
+        temperature (float): Temperature
+    """
+
+    def __init__(self, temperature: float):
+        """initialize NCE loss function
+
+        Args:
+            temperature (float): hyperparameter for NCE loss
+        """
+        super().__init__()
+        self.temperature = temperature
+
+    def forward(
+        self,
+        tree: WeisfeilerLemanLabelingTree,
+        anchors: torch.Tensor,
+        positives: torch.Tensor,
+        negatives: torch.Tensor,
+    ) -> torch.Tensor:
+        """calculate NCE loss
+
+        Args:
+            tree (WeisfeilerLemanLabelingTree): WLLT
+            anchors (torch.Tensor): anchor samples
+            positives (torch.Tensor): positive samples
+            negatives (torch.Tensor): negative samples
+
+        Returns:
+            torch.Tensor: loss value
+        """
+        # calculate loss
+        positive_distances = tree.calc_distance_between_subtree_weights(
+            anchors, positives
+        )
+        negative_distances = tree.calc_distance_between_subtree_weights(
+            anchors, negatives
+        )
+        positive_like = torch.exp(positive_distances / self.temperature)
+        negative_like = torch.exp(negative_distances / self.temperature)
+        return torch.mean(-torch.log(positive_like / (positive_like + negative_like)))
