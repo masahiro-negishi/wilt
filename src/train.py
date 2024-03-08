@@ -86,6 +86,17 @@ def train(
     path: str,
     **kwargs,
 ):
+    """train the model
+
+    Args:
+        dataset_name (str): dataset name
+        depth (int): number of layers in the WLLT
+        batch_size (int): batch size
+        n_epochs (int): number of epochs
+        lr (float): learning rate
+        path (str): path to the directory to save the results
+        **kwargs: hyperparameters for loss function
+    """
     # prepare the dataset, WLLT, sampler, loss function, and optimizer
     data = TUDataset(root="data/TUDataset", name=dataset_name)
     tree = WeisfeilerLemanLabelingTree(data, depth)
