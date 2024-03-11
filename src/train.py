@@ -1,8 +1,11 @@
+import argparse
 import json
 import os
 import random
+import time
 
 import matplotlib.pyplot as plt  # type: ignore
+import numpy as np
 import torch
 from torch import nn
 from torch.optim import Adam
@@ -86,6 +89,8 @@ def train(
     n_epochs: int,
     lr: float,
     path: str,
+    save_interval: int,
+    seed: int,
     **kwargs,
 ):
     """train the model
@@ -98,22 +103,38 @@ def train(
         n_epochs (int): number of epochs
         lr (float): learning rate
         path (str): path to the directory to save the results
-        **kwargs: hyperparameters for loss function
+        save_interval (int): How often to save the model
+        seed (int): random seed
+        **kwargs: hyperparameter for loss function
     """
+    hyperparameter = "margin" if loss_name == "triplet" else "temperature"
+
+    # fix seed
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    random.seed(seed)
+    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic = True
+
     # prepare the dataset, WLLT, sampler, loss function, and optimizer
     data = TUDataset(root="data/TUDataset", name=dataset_name)
+    tree_start = time.time()
     tree = WeisfeilerLemanLabelingTree(data, depth)
+    tree_end = time.time()
     sampler = TripletSampler(data, batch_size)
     if loss_name == "triplet":
-        loss_fn: nn.Module = TripletLoss(margin=kwargs["margin"])
+        loss_fn: nn.Module = TripletLoss(margin=kwargs[hyperparameter])
     else:
-        loss_fn = NCELoss(temperature=kwargs["temperature"])
+        loss_fn = NCELoss(temperature=kwargs[hyperparameter])
     tree.parameter.requires_grad = True
     optimizer = Adam([tree.parameter], lr=lr)
 
     # train the model
     loss_hist = []
+    torch.save(tree.parameter, os.path.join(path, f"model_0.pt"))
+    epoch_time: float = 0
     for epoch in range(n_epochs):
+        train_start = time.time()
         loss_sum = 0
         for indices in sampler:
             dists = torch.stack(
@@ -130,20 +151,28 @@ def train(
             optimizer.step()
             loss_sum += loss.item()
         loss_hist.append(loss_sum / len(sampler))
+        train_end = time.time()
+        epoch_time += train_end - train_start
         print(f"Epoch {epoch + 1}/{n_epochs}, Loss: {loss_hist[-1]}")
+        if (epoch + 1) % save_interval == 0:
+            torch.save(tree.parameter, os.path.join(path, f"model_{epoch + 1}.pt"))
+    epoch_time /= n_epochs
 
     # save the training information
     info = {
         "dataset_name": dataset_name,
         "depth": depth,
+        "loss_name": loss_name,
         "batch_size": batch_size,
         "n_epochs": n_epochs,
         "lr": lr,
-        "loss_history": loss_hist,
-        "hyperparameters": kwargs,
+        "save_interval": save_interval,
+        "seed": seed,
     }
-    for key, val in kwargs.items():
-        info[key] = val
+    info[hyperparameter] = kwargs[hyperparameter]
+    info["tree_time"] = tree_end - tree_start
+    info["epoch_time"] = epoch_time
+    info["loss_history"] = loss_hist
     with open(os.path.join(path, "info.json"), "w") as f:
         json.dump(info, f)
 
@@ -151,11 +180,41 @@ def train(
     plt.plot(loss_hist)
     plt.xlabel("Epoch")
     plt.ylabel("Loss")
-    plt.title(f"{dataset_name}, d={depth}, b={batch_size}, lr={lr}, h={kwargs}")
+    plt.title(
+        f"{dataset_name}, d={depth},  l={loss_name}, b={batch_size}, lr={lr}, {hyperparameter}={kwargs[hyperparameter]}"
+    )
     plt.savefig(os.path.join(path, "loss.png"))
     plt.yscale("log")
     plt.savefig(os.path.join(path, "loss_log.png"))
     plt.close()
 
     # save the model
-    torch.save(tree.parameter, os.path.join(path, "model.pt"))
+    torch.save(tree.parameter, os.path.join(path, "model_final.pt"))
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--dataset_name", choices=["MUTAG"])
+    parser.add_argument("--depth", type=int)
+    parser.add_argument("--loss_name", choices=["triplet", "nce"])
+    parser.add_argument("--batch_size", type=int)
+    parser.add_argument("--n_epochs", type=int)
+    parser.add_argument("--lr", type=float)
+    parser.add_argument("--save_interval", type=int)
+    parser.add_argument("--seed", type=int)
+    parser.add_argument("--margin", type=float, required=False)
+    parser.add_argument("--temperature", type=float, required=False)
+    args = parser.parse_args()
+    kwargs = args.__dict__
+    if args.loss_name == "triplet":
+        kwargs["path"] = os.path.join(
+            RESULT_DIR,
+            f"{args.dataset_name}_d={args.depth}_{args.loss_name}_b={args.batch_size}_e={args.n_epochs}_lr={args.lr}_s={args.seed}_m={args.margin}",
+        )
+    else:
+        kwargs["path"] = os.path.join(
+            RESULT_DIR,
+            f"{args.dataset_name}_d={args.depth}_{args.loss_name}_b={args.batch_size}_e={args.n_epochs}_lr={args.lr}_s={args.seed}_t={args.temperature}",
+        )
+    os.makedirs(kwargs["path"], exist_ok=True)
+    train(**kwargs)

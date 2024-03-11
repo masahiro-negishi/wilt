@@ -28,10 +28,10 @@ def test_TripletSampler(dataset_name: str, batch_size: int):
 
 
 @pytest.mark.parametrize(
-    "dataset_name, depth, loss_name, batch_size, n_epochs, lr, hyperparameter",
+    "dataset_name, depth, loss_name, batch_size, n_epochs, lr, save_interval, seed, hyperparameter",
     [
-        ("MUTAG", 2, "triplet", 10, 2, 0.01, 1),
-        ("MUTAG", 3, "nce", 20, 1, 0.001, 1),
+        ("MUTAG", 2, "triplet", 10, 2, 0.01, 5, 0, 1),
+        ("MUTAG", 3, "nce", 20, 1, 0.001, 10, 42, 1),
     ],
 )
 def test_train(
@@ -42,6 +42,8 @@ def test_train(
     batch_size: int,
     n_epochs: int,
     lr: float,
+    save_interval: int,
+    seed: int,
     hyperparameter: float,
 ):
     if loss_name == "triplet":
@@ -53,6 +55,8 @@ def test_train(
             n_epochs,
             lr,
             str(tmpdir),
+            save_interval,
+            seed,
             margin=hyperparameter,
         )
     else:
@@ -64,13 +68,21 @@ def test_train(
             n_epochs,
             lr,
             str(tmpdir),
+            save_interval,
+            seed,
             temperature=hyperparameter,
         )
     assert os.path.exists(os.path.join(str(tmpdir), "info.json"))
     assert os.path.exists(os.path.join(str(tmpdir), "loss.png"))
     assert os.path.exists(os.path.join(str(tmpdir), "loss_log.png"))
-    assert os.path.exists(os.path.join(str(tmpdir), "model.pt"))
+    assert os.path.exists(os.path.join(str(tmpdir), "model_final.pt"))
+    for i in range(0, n_epochs // save_interval):
+        assert os.path.exists(
+            os.path.join(str(tmpdir), f"model_{(i+1) * save_interval}.pt")
+        )
     os.remove(os.path.join(str(tmpdir), "info.json"))
     os.remove(os.path.join(str(tmpdir), "loss.png"))
     os.remove(os.path.join(str(tmpdir), "loss_log.png"))
-    os.remove(os.path.join(str(tmpdir), "model.pt"))
+    os.remove(os.path.join(str(tmpdir), "model_final.pt"))
+    for i in range(0, n_epochs // save_interval):
+        os.remove(os.path.join(str(tmpdir), f"model_{(i+1) * save_interval}.pt"))
