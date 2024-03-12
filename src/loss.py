@@ -4,6 +4,7 @@ import torch
 from torch import nn
 
 from tree import WeisfeilerLemanLabelingTree
+import numpy as np
 
 
 class TripletLoss(nn.Module):
@@ -70,6 +71,8 @@ class NCELoss(nn.Module):
         """
         super().__init__()
         self.temperature = temperature
+        self.float32_max = np.finfo(np.float32).max
+        self.float32_smallest_positive = np.finfo(np.float32).smallest_normal
 
     def forward(
         self,
@@ -96,6 +99,18 @@ class NCELoss(nn.Module):
         negative_distances = tree.calc_distance_between_subtree_weights(
             anchors, negatives
         )
-        positive_like = torch.exp(positive_distances / self.temperature)
-        negative_like = torch.exp(negative_distances / self.temperature)
-        return torch.mean(-torch.log(positive_like / (positive_like + negative_like)))
+        max_distances = torch.max(positive_distances, negative_distances)
+        positive_like = torch.exp(
+            (positive_distances - max_distances) / self.temperature
+        )
+        negative_like = torch.exp(
+            (negative_distances - max_distances) / self.temperature
+        )
+        return torch.mean(
+            -torch.log(
+                torch.clip(
+                    positive_like / (positive_like + negative_like),
+                    min=self.float32_smallest_positive,
+                )
+            )
+        )
