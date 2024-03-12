@@ -153,7 +153,8 @@ def train(
         loss_hist.append(loss_sum / len(sampler))
         train_end = time.time()
         epoch_time += train_end - train_start
-        print(f"Epoch {epoch + 1}/{n_epochs}, Loss: {loss_hist[-1]}")
+        if (epoch + 1) % 10 == 0:
+            print(f"Epoch {epoch + 1}/{n_epochs}, Loss: {loss_hist[-1]}")
         if (epoch + 1) % save_interval == 0:
             torch.save(tree.parameter, os.path.join(path, f"model_{epoch + 1}.pt"))
     epoch_time /= n_epochs
