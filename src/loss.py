@@ -106,7 +106,7 @@ class NCELoss(nn.Module):
         )
         return torch.mean(
             -torch.log(
-                torch.clip(
+                torch.clamp(
                     positive_like / (positive_like + negative_like),
                     min=self.float32_smallest_positive,
                 )
