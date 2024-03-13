@@ -153,7 +153,7 @@ def train(
             optimizer.step()
             if clip_param_threshold is not None:
                 tree.parameter.data = torch.clamp(
-                    tree.parameter, min=-clip_param_threshold
+                    tree.parameter, min=clip_param_threshold
                 )
             loss_sum += loss.item()
         loss_hist.append(loss_sum / len(sampler))
