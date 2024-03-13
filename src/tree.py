@@ -1,5 +1,3 @@
-import os
-
 import torch
 from torch_geometric.data import Batch, Data, Dataset  # type: ignore
 
