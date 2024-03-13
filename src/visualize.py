@@ -55,7 +55,6 @@ def visualize_graph(
         edge_dict (Optional[dict]): Convert edge attribute from integer. Defaults to None.
     """
     nx_graph = nx.Graph()
-    int2elem = {0: "C", 1: "N", 2: "O", 3: "F", 4: "I", 5: "Cl", 6: "Br"}
     for node_idx, node_attr in enumerate(torch.argmax(graph.x, dim=1)):
         if node_dict is not None:
             nx_graph.add_node(node_idx, label=node_dict[node_attr.item()])
