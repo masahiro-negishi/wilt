@@ -13,10 +13,9 @@ from torch.optim import Adam
 from torch.utils.data import Sampler
 from torch_geometric.data import Dataset  # type: ignore
 from torch_geometric.datasets import TUDataset  # type: ignore
-from torch_geometric.loader import DataLoader  # type: ignore
 
 from loss import NCELoss, TripletLoss
-from path import RESULT_DIR  # type: ignore
+from path import DATA_DIR, RESULT_DIR  # type: ignore
 from tree import WeisfeilerLemanLabelingTree
 
 
@@ -120,7 +119,7 @@ def train(
     torch.backends.cudnn.deterministic = True
 
     # prepare the dataset, WLLT, sampler, loss function, and optimizer
-    data = TUDataset(root="data/TUDataset", name=dataset_name)
+    data = TUDataset(root=os.path.join(DATA_DIR, "TUDataset"), name=dataset_name)
     tree_start = time.time()
     tree = WeisfeilerLemanLabelingTree(data, depth, clip_param_threshold is not None)
     tree_end = time.time()
