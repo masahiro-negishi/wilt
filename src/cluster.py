@@ -1,7 +1,6 @@
 import math
 
 import matplotlib.pyplot as plt  # type: ignore
-import torch
 import torch_geometric.datasets  # type: ignore
 from sklearn.manifold import TSNE  # type: ignore
 from sklearn.metrics import silhouette_score  # type: ignore

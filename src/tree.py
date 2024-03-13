@@ -2,7 +2,6 @@ import os
 
 import torch
 from torch_geometric.data import Batch, Data, Dataset  # type: ignore
-from torch_geometric.datasets import TUDataset  # type: ignore
 
 from path import DATA_DIR
 

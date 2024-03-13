@@ -3,6 +3,7 @@ import json
 import os
 import random
 import time
+from typing import Optional
 
 import matplotlib.pyplot as plt  # type: ignore
 import numpy as np
@@ -17,7 +18,6 @@ from torch_geometric.loader import DataLoader  # type: ignore
 from loss import NCELoss, TripletLoss
 from path import RESULT_DIR  # type: ignore
 from tree import WeisfeilerLemanLabelingTree
-from typing import Optional, Union
 
 
 class TripletSampler(Sampler):

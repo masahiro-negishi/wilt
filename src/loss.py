@@ -1,10 +1,8 @@
-import random
-
+import numpy as np
 import torch
 from torch import nn
 
 from tree import WeisfeilerLemanLabelingTree
-import numpy as np
 
 
 class TripletLoss(nn.Module):

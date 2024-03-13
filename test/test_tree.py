@@ -3,7 +3,7 @@ import sys
 
 import pytest
 import torch
-from torch_geometric.data import Batch, Data  # type: ignore
+from torch_geometric.data import Batch  # type: ignore
 from torch_geometric.datasets import TUDataset  # type: ignore
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "../src"))
