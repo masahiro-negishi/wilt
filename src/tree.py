@@ -12,6 +12,7 @@ class WeisfeilerLemanLabelingTree:
 
     Attributes:
         depth (int): Number of layers in WWLLT
+        exp_parameter (bool): Whether to set weight as exp(parameter)
         n_nodes (int): Number of nodes in WWLLT
         parent (list[int]): Parent node of each node in WWLLT
         attr2label (dict[int, int]): Mapping from attribute to label (for layer 0)
@@ -37,14 +38,16 @@ class WeisfeilerLemanLabelingTree:
         load_parameter
     """
 
-    def __init__(self, data: Dataset, depth: int) -> None:
+    def __init__(self, data: Dataset, depth: int, exp_parameter: bool = True) -> None:
         """initialize WWLLT
 
         Args:
             data (Dataset): Dataset
             depth (int): Number of layers in WWLLT
+            exp_parameter (bool, optional): Whether to set weight as exp(parameter). Defaults to True.
         """
         self.depth = depth
+        self.exp_parameter = exp_parameter
         assert self.depth > 0, "Depth should be greater than 0"
         self._build_tree(data)
 
@@ -63,10 +66,8 @@ class WeisfeilerLemanLabelingTree:
         return adj_list
 
     def _build_tree(self, data) -> None:
-        """Build WWLLT tree
-
-        Args:
-            data (Dataset): Dataset
+        """Build WWLLT treeexpt/expt1.sh
+        data (Dataset): Dataset
         """
         cnt_nodes: list[int] = [
             0 for _ in range(self.depth + 1)
@@ -138,7 +139,10 @@ class WeisfeilerLemanLabelingTree:
 
     @property
     def weight(self) -> torch.Tensor:
-        return torch.exp(self.parameter)
+        if self.exp_parameter:
+            return torch.exp(self.parameter)
+        else:
+            return self.parameter
 
     def calc_distribution_on_tree(self, graph: Data) -> torch.Tensor:
         """calculate distribution on WWLLT

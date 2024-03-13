@@ -17,6 +17,7 @@ from torch_geometric.loader import DataLoader  # type: ignore
 from loss import NCELoss, TripletLoss
 from path import RESULT_DIR  # type: ignore
 from tree import WeisfeilerLemanLabelingTree
+from typing import Optional, Union
 
 
 class TripletSampler(Sampler):
@@ -91,6 +92,7 @@ def train(
     path: str,
     save_interval: int,
     seed: int,
+    clip_param_threshold: Optional[float] = None,
     **kwargs,
 ):
     """train the model
@@ -105,6 +107,7 @@ def train(
         path (str): path to the directory to save the results
         save_interval (int): How often to save the model
         seed (int): random seed
+        clip_param_threshold (Optional[float]): threshold for clipping the parameter
         **kwargs: hyperparameter for loss function
     """
     hyperparameter = "margin" if loss_name == "triplet" else "temperature"
@@ -119,7 +122,7 @@ def train(
     # prepare the dataset, WLLT, sampler, loss function, and optimizer
     data = TUDataset(root="data/TUDataset", name=dataset_name)
     tree_start = time.time()
-    tree = WeisfeilerLemanLabelingTree(data, depth)
+    tree = WeisfeilerLemanLabelingTree(data, depth, clip_param_threshold is not None)
     tree_end = time.time()
     sampler = TripletSampler(data, batch_size)
     if loss_name == "triplet":
@@ -149,6 +152,10 @@ def train(
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+            if clip_param_threshold is not None:
+                tree.parameter.data = torch.clamp(
+                    tree.parameter, min=-clip_param_threshold
+                )
             loss_sum += loss.item()
         loss_hist.append(loss_sum / len(sampler))
         train_end = time.time()
@@ -205,17 +212,30 @@ if __name__ == "__main__":
     parser.add_argument("--seed", type=int)
     parser.add_argument("--margin", type=float, required=False)
     parser.add_argument("--temperature", type=float, required=False)
+    parser.add_argument("--clip_param_threshold", type=str, required=False)
     args = parser.parse_args()
+    if args.clip_param_threshold is not None:
+        if args.clip_param_threshold.lower() == "none":
+            args.clip_param_threshold = None
+        try:
+            args.clip_param_threshold = float(args.clip_param_threshold)
+        except ValueError:
+            if args.clip_param_threshold == "smallest_normal":
+                args.clip_param_threshold = np.finfo(np.float32).smallest_normal
+            else:
+                raise ValueError(
+                    f"Invalid value for clip_param_threshold: {args.clip_param_threshold}"
+                )
     kwargs = args.__dict__
     if args.loss_name == "triplet":
         kwargs["path"] = os.path.join(
             RESULT_DIR,
-            f"{args.dataset_name}_d={args.depth}_{args.loss_name}_b={args.batch_size}_e={args.n_epochs}_lr={args.lr}_s={args.seed}_m={args.margin}",
+            f"{args.dataset_name}_d={args.depth}_{args.loss_name}_b={args.batch_size}_e={args.n_epochs}_lr={args.lr}_s={args.seed}_m={args.margin}_c={args.clip_param_threshold}",
         )
     else:
         kwargs["path"] = os.path.join(
             RESULT_DIR,
-            f"{args.dataset_name}_d={args.depth}_{args.loss_name}_b={args.batch_size}_e={args.n_epochs}_lr={args.lr}_s={args.seed}_t={args.temperature}",
+            f"{args.dataset_name}_d={args.depth}_{args.loss_name}_b={args.batch_size}_e={args.n_epochs}_lr={args.lr}_s={args.seed}_t={args.temperature}_c={args.clip_param_threshold}",
         )
     os.makedirs(kwargs["path"], exist_ok=True)
     train(**kwargs)
