@@ -14,7 +14,7 @@ do
             done
             python src/train.py --dataset_name "MUTAG" --depth $depth --loss_name "triplet" \
             --batch_size "20" --n_epochs 1000 --lr $lr --save_interval 100 --seed 0 \
-            --margin $margin &
+            --clip_param_threshold "smallest_normal" --margin $margin &
         done
     done
 done
