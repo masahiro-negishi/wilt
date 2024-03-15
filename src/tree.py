@@ -23,6 +23,7 @@ class WeisfeilerLemanLabelingTree:
         __init__
         |-- _build_tree
             |-- _adjancy_list
+            |-- reset_parameter
 
         weight
 
@@ -132,7 +133,7 @@ class WeisfeilerLemanLabelingTree:
                 ]
 
         # weight
-        self.parameter: torch.Tensor = torch.zeros(self.n_nodes, dtype=torch.float32)
+        self.reset_parameter()
 
     @property
     def weight(self) -> torch.Tensor:
@@ -263,6 +264,15 @@ class WeisfeilerLemanLabelingTree:
             [self.calc_distribution_on_tree(g) for g in graph2], dim=0
         )  # (batch_size, self.n_nodes)
         return self.calc_distance_between_dists(dist1, dist2)
+
+    def reset_parameter(self) -> None:
+        """reset parameter"""
+        if self.exp_parameter:
+            self.parameter: torch.Tensor = torch.zeros(
+                self.n_nodes, dtype=torch.float32
+            )
+        else:
+            self.parameter = torch.ones(self.n_nodes, dtype=torch.float32)
 
     def load_parameter(self, path: str) -> None:
         """load parameter from file
