@@ -175,7 +175,9 @@ def train(
         "lr": lr,
         "save_interval": save_interval,
         "seed": seed,
-        "clip_param_threshold": float(clip_param_threshold),
+        "clip_param_threshold": (
+            float(clip_param_threshold) if clip_param_threshold is not None else None
+        ),
     }
     info[hyperparameter] = kwargs[hyperparameter]
     info["tree_time"] = tree_end - tree_start
