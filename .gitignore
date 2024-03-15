@@ -2,6 +2,7 @@ lwwllt_env/
 
 data/
 rslt/
+anlys/
 
 __pycache__/
 .mypy_cache/
