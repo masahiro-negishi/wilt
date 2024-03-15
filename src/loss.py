@@ -69,8 +69,7 @@ class NCELoss(nn.Module):
         """
         super().__init__()
         self.temperature = temperature
-        self.float32_max = np.finfo(np.float32).max
-        self.float32_smallest_positive = np.finfo(np.float32).smallest_normal
+        self.float32_smallest_positive = float(np.finfo(np.float32).smallest_normal)
 
     def forward(
         self,
