@@ -1,6 +1,9 @@
 import math
 
+import matplotlib  # type: ignore
 import matplotlib.pyplot as plt  # type: ignore
+import numpy as np
+import torch
 import torch_geometric.datasets  # type: ignore
 from sklearn.manifold import TSNE  # type: ignore
 from sklearn.metrics import silhouette_score  # type: ignore
@@ -10,78 +13,108 @@ from utils import dataset_to_distance_matrix
 
 
 def tSNE(
-    tree: WeisfeilerLemanLabelingTree, data: torch_geometric.datasets, path: str
+    tree: WeisfeilerLemanLabelingTree,
+    data: torch_geometric.datasets,
+    ax: matplotlib.axes.Axes,
+    train_indices: np.ndarray,
+    eval_indices: np.ndarray,
 ) -> None:
     """tSNE visualization
 
     Args:
         tree (WeisfeilerLemanLabelingTree): WLLT
         data (torch_geometric.datasets): Dataset
-        path (str): Path to save tSNE visualization
+        ax (matplotlib.axes.Axes): Axes to draw the visualization
+        train_indices (np.ndarray): Indices of the training data
+        eval_indices (np.ndarray): Indices of the evaluation data
     """
-    distances = dataset_to_distance_matrix(tree, data)
+    distances = dataset_to_distance_matrix(tree, data[train_indices])
     embedding = TSNE(
         n_components=2,
         metric="precomputed",
         init="random",
         random_state=0,
     ).fit_transform(distances)
-
-    plt.figure(figsize=(10, 10))
-    plt.scatter(embedding[:, 0], embedding[:, 1], c=data.y)
-    plt.savefig(path)
-    plt.close()
+    for i, c in enumerate(torch.unique(data.y)):
+        indices = torch.where(data.y[train_indices] == c)[0]
+        ax.scatter(
+            embedding[indices, 0],
+            embedding[indices, 1],
+            color=plt.get_cmap("tab10").colors[i],
+            label=f"class {c.item()}",
+        )
 
 
 def intra_inter_distance(
-    tree: WeisfeilerLemanLabelingTree, data: torch_geometric.datasets, path: str
+    tree: WeisfeilerLemanLabelingTree,
+    data: torch_geometric.datasets,
+    ax: matplotlib.axes.Axes,
+    train_indices: np.ndarray,
+    eval_indices: np.ndarray,
 ) -> None:
     """visualize distribution of intra and inter distances
 
     Args:
         tree (WeisfeilerLemanLabelingTree): WLLT
         data (torch_geometric.datasets): Dataset
-        path (str): Path to save intra and inter distance visualization
+        ax (matplotlib.axes.Axes): Axes to draw the visualization
+        train_indices (np.ndarray): Indices of the training data
+        eval_indices (np.ndarray): Indices of the evaluation data
     """
-    distances = dataset_to_distance_matrix(tree, data)
-    intra_distances = []
-    inter_distances = []
-    for i in range(len(data)):
-        for j in range(i + 1, len(data)):
+    train_distances = dataset_to_distance_matrix(tree, data[train_indices])
+    eval_distances = dataset_to_distance_matrix(tree, data[eval_indices])
+    train_intra_distances = []
+    train_inter_distances = []
+    eval_intra_distances = []
+    eval_inter_distances = []
+    for i in range(len(train_distances)):
+        for j in range(i + 1, len(train_distances)):
             if data[i].y == data[j].y:
-                intra_distances.append(distances[i, j].item())
+                train_intra_distances.append(train_distances[i, j].item())
             else:
-                inter_distances.append(distances[i, j].item())
+                train_inter_distances.append(train_distances[i, j].item())
+    for i in range(len(eval_distances)):
+        for j in range(i + 1, len(eval_distances)):
+            if data[i].y == data[j].y:
+                eval_intra_distances.append(eval_distances[i, j].item())
+            else:
+                eval_inter_distances.append(eval_distances[i, j].item())
 
     # histogram
-    left = math.floor(min(min(intra_distances), min(inter_distances)))
-    right = math.ceil(max(max(intra_distances), max(inter_distances)))
-    plt.figure(figsize=(10, 10))
-    plt.hist(
-        intra_distances,
-        bins=right - left,
+    left = math.floor(
+        min(
+            min(train_intra_distances),
+            min(train_inter_distances),
+            min(eval_intra_distances),
+            min(eval_inter_distances),
+        )
+    )
+    right = math.ceil(
+        max(
+            max(train_intra_distances),
+            max(train_inter_distances),
+            max(eval_intra_distances),
+            max(eval_inter_distances),
+        )
+    )
+    train_intra_hist, _, _ = ax.hist(
+        [train_intra_distances, train_inter_distances],
+        bins=10,
         range=(left, right),
         density=True,
-        alpha=0.5,
-        label="intra",
+        label=["train intra", "train inter"],
     )
-    plt.hist(
-        inter_distances,
-        bins=right - left,
+    ax.hist(
+        [eval_intra_distances, eval_inter_distances],
+        bins=10,
         range=(left, right),
         density=True,
-        alpha=0.5,
-        label="inter",
+        bottom=np.max(train_intra_hist) * 1.1,
+        label=["eval intra", "eval inter"],
     )
-    plt.legend()
-    plt.title(
-        f"ave intra distance: {sum(intra_distances) / len(intra_distances)}\nave inter distance: {sum(inter_distances) / len(inter_distances)}"
-    )
-    plt.savefig(path)
-    plt.close()
 
 
-def silhouette_coefficient(
+def silhouette(
     tree: WeisfeilerLemanLabelingTree, data: torch_geometric.datasets
 ) -> float:
     """Silhouette coefficient

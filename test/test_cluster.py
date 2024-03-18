@@ -1,11 +1,12 @@
 import os
 import sys
 
+import matplotlib.pyplot as plt  # type: ignore
 import pytest
 from torch_geometric.datasets import TUDataset  # type: ignore
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "../src"))
-from cluster import intra_inter_distance, silhouette_coefficient, tSNE  # type: ignore
+from cluster import intra_inter_distance, silhouette, tSNE  # type: ignore
 from path import DATA_DIR  # type: ignore
 from tree import WeisfeilerLemanLabelingTree  # type: ignore
 
@@ -14,31 +15,42 @@ from tree import WeisfeilerLemanLabelingTree  # type: ignore
     "dataset_name, depth",
     [("MUTAG", 1), ("MUTAG", 2)],
 )
-def test_tSNE(tmpdir, dataset_name, depth):
+def test_tSNE(dataset_name, depth):
     data = TUDataset(root=os.path.join(DATA_DIR, "TUDataset"), name=dataset_name)
     tree = WeisfeilerLemanLabelingTree(data, depth)
-    tSNE(tree, data, os.path.join(tmpdir, "test_tSNE.png"))
-    os.remove(os.path.join(tmpdir, "test_tSNE.png"))
-
-
-@pytest.mark.parametrize(
-    "dataset_name, depth",
-    [("MUTAG", 1), ("MUTAG", 2)],
-)
-def test_intra_inter_distance(tmpdir, dataset_name, depth):
-    data = TUDataset(root=os.path.join(DATA_DIR, "TUDataset"), name=dataset_name)
-    tree = WeisfeilerLemanLabelingTree(data, depth)
-    intra_inter_distance(
-        tree, data, os.path.join(tmpdir, "test_intra_inter_distance.png")
+    fig, ax = plt.subplots()
+    indices = list(range(len(data)))
+    tSNE(
+        tree,
+        data,
+        ax,
+        indices[: len(data) // 2],
+        indices[len(data) // 2 :],
     )
-    os.remove(os.path.join(tmpdir, "test_intra_inter_distance.png"))
+    plt.close(fig)
 
 
 @pytest.mark.parametrize(
     "dataset_name, depth",
     [("MUTAG", 1), ("MUTAG", 2)],
 )
-def test_silhouette_coefficient(tmpdir, dataset_name, depth):
+def test_intra_inter_distance(dataset_name, depth):
     data = TUDataset(root=os.path.join(DATA_DIR, "TUDataset"), name=dataset_name)
     tree = WeisfeilerLemanLabelingTree(data, depth)
-    silhouette_coefficient(tree, data)
+    fig, ax = plt.subplots()
+    indices = list(range(len(data)))
+    intra_inter_distance(
+        tree, data, ax, indices[: len(data) // 2], indices[len(data) // 2 :]
+    )
+    plt.close(fig)
+
+
+@pytest.mark.parametrize(
+    "dataset_name, depth",
+    [("MUTAG", 1), ("MUTAG", 2)],
+)
+def test_silhouette(dataset_name, depth):
+    data = TUDataset(root=os.path.join(DATA_DIR, "TUDataset"), name=dataset_name)
+    tree = WeisfeilerLemanLabelingTree(data, depth)
+    score = silhouette(tree, data)
+    assert score >= -1 and score <= 1
