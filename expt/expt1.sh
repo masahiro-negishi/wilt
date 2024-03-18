@@ -1,7 +1,7 @@
 cd $(dirname $0)
 cd ../
 
-MAX_JOBS=10
+MAX_JOBS=6
 
 for depth in 3 4 5
 do
@@ -12,9 +12,8 @@ do
             while (($(jobs -r | wc -l) >= $MAX_JOBS)); do
                 sleep 1
             done
-            python src/train.py --dataset_name "MUTAG" --depth $depth --loss_name "triplet" \
-            --batch_size "20" --n_epochs 1000 --lr $lr --save_interval 100 --seed 0 \
-            --margin $margin &
+            python src/train.py --dataset_name "MUTAG" --k_fold 5 --depth $depth --loss_name "triplet" \
+            --batch_size "20" --n_epochs 1000 --lr $lr --save_interval 100 --seed 0 --margin $margin &
         done
     done
 done
