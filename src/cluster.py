@@ -69,13 +69,13 @@ def intra_inter_distance(
     eval_inter_distances = []
     for i in range(len(train_distances)):
         for j in range(i + 1, len(train_distances)):
-            if data[i].y == data[j].y:
+            if data[train_indices[i]].y == data[train_indices[j]].y:
                 train_intra_distances.append(train_distances[i, j].item())
             else:
                 train_inter_distances.append(train_distances[i, j].item())
     for i in range(len(eval_distances)):
         for j in range(i + 1, len(eval_distances)):
-            if data[i].y == data[j].y:
+            if data[eval_indices[i]].y == data[eval_indices[j]].y:
                 eval_intra_distances.append(eval_distances[i, j].item())
             else:
                 eval_inter_distances.append(eval_distances[i, j].item())
