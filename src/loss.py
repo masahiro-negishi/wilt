@@ -69,7 +69,7 @@ class NCELoss(nn.Module):
         """
         super().__init__()
         self.temperature = temperature
-        self.float32_smallest_positive = float(np.finfo(np.float32).smallest_normal)
+        self.clamp_threshold = 1e-10
 
     def forward(
         self,
@@ -89,25 +89,23 @@ class NCELoss(nn.Module):
         Returns:
             torch.Tensor: loss value
         """
-        # calculate loss
         positive_distances = tree.calc_distance_between_subtree_weights(
             anchors, positives
         )
         negative_distances = tree.calc_distance_between_subtree_weights(
             anchors, negatives
         )
-        max_distances = torch.max(positive_distances, negative_distances)
-        positive_like = torch.exp(
-            (positive_distances - max_distances) / self.temperature
+        positive_like = torch.clamp(
+            torch.exp(-positive_distances / self.temperature), self.clamp_threshold
         )
-        negative_like = torch.exp(
-            (negative_distances - max_distances) / self.temperature
+        negative_like = torch.clamp(
+            torch.exp(-negative_distances / self.temperature), self.clamp_threshold
         )
         return torch.mean(
             -torch.log(
                 torch.clamp(
                     positive_like / (positive_like + negative_like),
-                    min=self.float32_smallest_positive,
+                    min=self.clamp_threshold,
                 )
             )
         )
