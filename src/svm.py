@@ -7,7 +7,7 @@ from tree import WeisfeilerLemanLabelingTree
 from utils import dataset_to_distance_matrix
 
 
-def _svm(
+def svm(
     tree: WeisfeilerLemanLabelingTree,
     train_data: torch_geometric.datasets,
     test_data: torch_geometric.datasets,
@@ -82,6 +82,6 @@ def svm_cross_validation(
         )
         train_data = data[train_indices]
         test_data = data[test_indices]
-        accuracy = _svm(tree, train_data, test_data)
+        accuracy = svm(tree, train_data, test_data)
         accuracies.append(accuracy)
     return sum(accuracies) / k
