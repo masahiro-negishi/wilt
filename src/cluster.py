@@ -6,7 +6,6 @@ import numpy as np
 import torch
 import torch_geometric.datasets  # type: ignore
 from sklearn.manifold import TSNE  # type: ignore
-from sklearn.metrics import silhouette_score  # type: ignore
 
 from tree import WeisfeilerLemanLabelingTree
 from utils import dataset_to_distance_matrix
@@ -112,22 +111,3 @@ def intra_inter_distance(
         bottom=np.max(train_intra_hist) * 1.1,
         label=["eval intra", "eval inter"],
     )
-
-
-def silhouette(
-    tree: WeisfeilerLemanLabelingTree, data: torch_geometric.datasets
-) -> float:
-    """Silhouette coefficient
-
-    Args:
-        tree (WeisfeilerLemanLabelingTree): WLLT
-        data (torch_geometric.datasets): Dataset
-
-    Returns:
-        float: [-1, 1]. The best value is 1 and the worst value is -1.
-    """
-    distances = dataset_to_distance_matrix(tree, data)
-    score = silhouette_score(
-        distances, labels=data.y, metric="precomputed", random_state=0
-    )
-    return score
