@@ -219,6 +219,7 @@ def cross_validation(
     dataset_name: str,
     k_fold: int,
     depth: int,
+    normalize: bool,
     loss_name: str,
     batch_size: int,
     n_epochs: int,
@@ -235,6 +236,7 @@ def cross_validation(
         dataset_name (str): dataset name
         k_fold (int): number of splits
         depth (int): number of layers in the WLLT
+        normalize (bool): whether to normalize the distribution on WLLT
         loss_name (str): name of the loss function
         batch_size (int): batch size
         n_epochs (int): number of epochs
@@ -248,7 +250,9 @@ def cross_validation(
 
     data = TUDataset(root=os.path.join(DATA_DIR, "TUDataset"), name=dataset_name)
     tree_start = time.time()
-    tree = WeisfeilerLemanLabelingTree(data, depth, clip_param_threshold is None)
+    tree = WeisfeilerLemanLabelingTree(
+        data, depth, clip_param_threshold is None, normalize
+    )
     tree_end = time.time()
     n_samples = len(data)
     indices = np.random.RandomState(seed=seed).permutation(n_samples)
@@ -287,6 +291,7 @@ def cross_validation(
         "dataset_name": dataset_name,
         "k_fold": k_fold,
         "depth": depth,
+        "normalize": normalize,
         "loss_name": loss_name,
         "batch_size": batch_size,
         "n_epochs": n_epochs,
@@ -310,6 +315,7 @@ if __name__ == "__main__":
     parser.add_argument("--dataset_name", choices=["MUTAG"])
     parser.add_argument("--k_fold", type=int)
     parser.add_argument("--depth", type=int)
+    parser.add_argument("--normalize", action="store_true")
     parser.add_argument("--loss_name", choices=["triplet", "nce"])
     parser.add_argument("--batch_size", type=int)
     parser.add_argument("--n_epochs", type=int)
@@ -334,15 +340,16 @@ if __name__ == "__main__":
                         f"Invalid value for clip_param_threshold: {args.clip_param_threshold}"
                     )
     kwargs = args.__dict__
+    norm = "norm" if args.normalize else "unnorm"
     if args.loss_name == "triplet":
         kwargs["path"] = os.path.join(
             RESULT_DIR,
-            f"{args.dataset_name}_d={args.depth}_{args.loss_name}_b={args.batch_size}_e={args.n_epochs}_lr={args.lr}_s={args.seed}_m={args.margin}_c={args.clip_param_threshold}",
+            f"{args.dataset_name}_d={args.depth}_{norm}_{args.loss_name}_b={args.batch_size}_e={args.n_epochs}_lr={args.lr}_s={args.seed}_m={args.margin}_c={args.clip_param_threshold}",
         )
     else:
         kwargs["path"] = os.path.join(
             RESULT_DIR,
-            f"{args.dataset_name}_d={args.depth}_{args.loss_name}_b={args.batch_size}_e={args.n_epochs}_lr={args.lr}_s={args.seed}_t={args.temperature}_c={args.clip_param_threshold}",
+            f"{args.dataset_name}_d={args.depth}_{norm}_{args.loss_name}_b={args.batch_size}_e={args.n_epochs}_lr={args.lr}_s={args.seed}_t={args.temperature}_c={args.clip_param_threshold}",
         )
     os.makedirs(kwargs["path"], exist_ok=True)
     cross_validation(**kwargs)

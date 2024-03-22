@@ -30,16 +30,17 @@ def test_TripletSampler(dataset_name: str, batch_size: int):
 
 
 @pytest.mark.parametrize(
-    "dataset_name, depth, loss_name, batch_size, n_epochs, lr, save_interval, seed, clip_param_threshold, hyperparameter",
+    "dataset_name, depth, normalize, loss_name, batch_size, n_epochs, lr, save_interval, seed, clip_param_threshold, hyperparameter",
     [
-        ("MUTAG", 2, "triplet", 10, 2, 0.01, 5, 0, None, 1),
-        ("MUTAG", 3, "nce", 20, 1, 0.001, 10, 42, 1e-3, 1),
+        ("MUTAG", 2, True, "triplet", 10, 2, 0.01, 5, 0, None, 1),
+        ("MUTAG", 3, False, "nce", 20, 1, 0.001, 10, 42, 1e-3, 1),
     ],
 )
 def test_train(
     tmpdir,
     dataset_name: str,
     depth: int,
+    normalize: bool,
     loss_name: str,
     batch_size: int,
     n_epochs: int,
@@ -52,7 +53,9 @@ def test_train(
     data = TUDataset(root=os.path.join(DATA_DIR, "TUDataset"), name=dataset_name)
     train_data = data[: len(data) // 2]
     eval_data = data[len(data) // 2 :]
-    tree = WeisfeilerLemanLabelingTree(data, depth, clip_param_threshold is None)
+    tree = WeisfeilerLemanLabelingTree(
+        data, depth, clip_param_threshold is None, normalize
+    )
     if loss_name == "triplet":
         train(
             train_data,
@@ -100,10 +103,10 @@ def test_train(
 
 
 @pytest.mark.parametrize(
-    "dataset_name, k_fold, depth, loss_name, batch_size, n_epochs, lr, save_interval, seed, clip_param_threshold, hyperparameter",
+    "dataset_name, k_fold, depth, normalize, loss_name, batch_size, n_epochs, lr, save_interval, seed, clip_param_threshold, hyperparameter",
     [
-        ("MUTAG", 5, 2, "triplet", 10, 2, 0.01, 5, 0, None, 1),
-        ("MUTAG", 10, 3, "nce", 20, 1, 0.001, 10, 42, 1e-3, 1),
+        ("MUTAG", 5, 2, True, "triplet", 10, 2, 0.01, 5, 0, None, 1),
+        ("MUTAG", 10, 3, False, "nce", 20, 1, 0.001, 10, 42, 1e-3, 1),
     ],
 )
 def test_cross_validation(
@@ -111,6 +114,7 @@ def test_cross_validation(
     dataset_name: str,
     k_fold: int,
     depth: int,
+    normalize: bool,
     loss_name: str,
     batch_size: int,
     n_epochs: int,
@@ -125,6 +129,7 @@ def test_cross_validation(
             dataset_name,
             k_fold,
             depth,
+            normalize,
             loss_name,
             batch_size,
             n_epochs,
@@ -140,6 +145,7 @@ def test_cross_validation(
             dataset_name,
             k_fold,
             depth,
+            normalize,
             loss_name,
             batch_size,
             n_epochs,
