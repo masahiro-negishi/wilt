@@ -21,8 +21,8 @@ def visualize_WLLT(
         withweight (bool, optional): Whether to show weight. Defaults to True.
     """
     nx_tree = nx.Graph()
-    nx_tree.add_node(-1, label=-1)
-    for node_idx in range(tree.n_nodes):
+    nx_tree.add_node(0, label=0)
+    for node_idx in range(1, tree.n_nodes):
         nx_tree.add_node(node_idx, label=node_idx)
         nx_tree.add_edge(
             node_idx, tree.parent[node_idx], weight=tree.weight[node_idx].item()

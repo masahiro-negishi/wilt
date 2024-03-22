@@ -14,8 +14,8 @@ from tree import WeisfeilerLemanLabelingTree  # type: ignore
 @pytest.mark.parametrize(
     "dataset_name, depth, n_nodes",
     [
-        ("MUTAG", 2, 7 + 33 + 174),
-        ("MUTAG", 4, 7 + 33 + 174 + 572 + 1197),
+        ("MUTAG", 3, 1 + 7 + 33 + 174),
+        ("MUTAG", 5, 1 + 7 + 33 + 174 + 572 + 1197),
     ],
 )
 def test_WeisfeilerLemanLabelingTree_init(dataset_name: str, depth: int, n_nodes: int):
