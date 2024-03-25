@@ -13,7 +13,7 @@ from tree import WeisfeilerLemanLabelingTree  # type: ignore
 
 @pytest.mark.parametrize(
     "dataset_name, depth",
-    [("MUTAG", 1), ("MUTAG", 2)],
+    [("MUTAG", 1), ("MUTAG", 2), ("NCI1", 1), ("NCI1", 2)],
 )
 def test_tSNE(dataset_name, depth):
     data = TUDataset(root=os.path.join(DATA_DIR, "TUDataset"), name=dataset_name)
@@ -32,7 +32,7 @@ def test_tSNE(dataset_name, depth):
 
 @pytest.mark.parametrize(
     "dataset_name, depth",
-    [("MUTAG", 1), ("MUTAG", 2)],
+    [("MUTAG", 1), ("MUTAG", 2), ("NCI1", 1), ("NCI1", 2)],
 )
 def test_intra_inter_distance(dataset_name, depth):
     data = TUDataset(root=os.path.join(DATA_DIR, "TUDataset"), name=dataset_name)

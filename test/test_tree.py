@@ -16,6 +16,8 @@ from tree import WeisfeilerLemanLabelingTree  # type: ignore
     [
         ("MUTAG", 3, 1 + 7 + 33 + 174),
         ("MUTAG", 5, 1 + 7 + 33 + 174 + 572 + 1197),
+        ("NCI1", 3, 1 + 37 + 292 + 4058),
+        ("NCI1", 5, 1 + 37 + 292 + 4058 + 22948 + 44508),
     ],
 )
 def test_WeisfeilerLemanLabelingTree_init(dataset_name: str, depth: int, n_nodes: int):
@@ -26,7 +28,7 @@ def test_WeisfeilerLemanLabelingTree_init(dataset_name: str, depth: int, n_nodes
 
 @pytest.mark.parametrize(
     "dataset_name, depth",
-    [("MUTAG", 1), ("MUTAG", 3)],
+    [("MUTAG", 1), ("MUTAG", 3), ("NCI1", 1), ("NCI1", 3)],
 )
 def test_WeisfeilerLemanLabelingTree_calc_distance_between_dists(
     dataset_name: str, depth: int
@@ -46,7 +48,7 @@ def test_WeisfeilerLemanLabelingTree_calc_distance_between_dists(
 
 @pytest.mark.parametrize(
     "dataset_name, depth",
-    [("MUTAG", 1), ("MUTAG", 3)],
+    [("MUTAG", 1), ("MUTAG", 3), ("NCI1", 1), ("NCI1", 3)],
 )
 def test_WeisfeilerLemanLabelingTree_calc_distance_between_graphs(
     dataset_name: str, depth: int

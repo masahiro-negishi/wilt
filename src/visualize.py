@@ -60,23 +60,30 @@ def visualize_graph(
             nx_graph.add_node(node_idx, label=node_dict[node_attr.item()])
         else:
             nx_graph.add_node(node_idx, label=node_attr.item())
-    for (u, v), edge_attr in zip(
-        graph.edge_index.T, torch.argmax(graph.edge_attr, dim=1)
-    ):
-        if edge_dict is not None:
-            nx_graph.add_edge(u.item(), v.item(), label=edge_dict[edge_attr.item()])
-        else:
-            nx_graph.add_edge(u.item(), v.item(), label=edge_attr.item())
+    if graph.edge_attr is not None:
+        for (u, v), edge_attr in zip(
+            graph.edge_index.T, torch.argmax(graph.edge_attr, dim=1)
+        ):
+            if edge_dict is not None:
+                nx_graph.add_edge(u.item(), v.item(), label=edge_dict[edge_attr.item()])
+            else:
+                nx_graph.add_edge(u.item(), v.item(), label=edge_attr.item())
+    else:
+        for u, v in graph.edge_index.T:
+            nx_graph.add_edge(u.item(), v.item())
     plt.figure(figsize=(10, 10))
     pos = nx.spring_layout(nx_graph)
     nx.draw(nx_graph, pos)
     nx.draw_networkx_labels(
         nx_graph, pos, labels=nx.get_node_attributes(nx_graph, "label")
     )
-    nx.draw_networkx_edge_labels(
-        nx_graph,
-        pos,
-        edge_labels=nx.get_edge_attributes(nx_graph, "label"),
-    )
+    if graph.edge_attr is not None:
+        nx.draw_networkx_edge_labels(
+            nx_graph,
+            pos,
+            edge_labels=nx.get_edge_attributes(nx_graph, "label"),
+        )
+    else:
+        nx.draw_networkx_edge_labels(nx_graph, pos)
     plt.savefig(path)
     plt.close()

@@ -12,9 +12,9 @@ from tree import WeisfeilerLemanLabelingTree  # type: ignore
 
 @pytest.mark.parametrize(
     "dataset_name, depth, gamma",
-    [("MUTAG", 1, 1.0), ("MUTAG", 2, 0.1)],
+    [("MUTAG", 1, 1.0), ("MUTAG", 2, 0.1), ("NCI1", 1, 0.01), ("NCI1", 2, 10.0)],
 )
-def test_svm(tmpdir, dataset_name, depth, gamma):
+def test_svm(dataset_name, depth, gamma):
     data = TUDataset(root=os.path.join(DATA_DIR, "TUDataset"), name=dataset_name)
     tree = WeisfeilerLemanLabelingTree(data, depth)
     svm(tree, data[: len(data) // 2], data[len(data) // 2 :], gamma)
@@ -22,9 +22,9 @@ def test_svm(tmpdir, dataset_name, depth, gamma):
 
 @pytest.mark.parametrize(
     "dataset_name, depth, gamma",
-    [("MUTAG", 2, 10.0), ("MUTAG", 3, 0.01)],
+    [("MUTAG", 2, 10.0), ("MUTAG", 3, 0.01), ("NCI1", 2, 0.1), ("NCI1", 3, 1.0)],
 )
-def test_svm_cross_validation(tmpdir, dataset_name, depth, gamma):
+def test_svm_cross_validation(dataset_name, depth, gamma):
     data = TUDataset(root=os.path.join(DATA_DIR, "TUDataset"), name=dataset_name)
     tree = WeisfeilerLemanLabelingTree(data, depth)
     svm_cross_validation(tree, data, gamma=gamma)

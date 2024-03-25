@@ -18,6 +18,8 @@ from tree import WeisfeilerLemanLabelingTree  # type: ignore
     [
         ("MUTAG", 10),
         ("MUTAG", 20),
+        ("NCI1", 10),
+        ("NCI1", 20),
     ],
 )
 def test_TripletSampler(dataset_name: str, batch_size: int):
@@ -34,6 +36,8 @@ def test_TripletSampler(dataset_name: str, batch_size: int):
     [
         ("MUTAG", 2, True, "triplet", 10, 2, 0.01, 5, 0, None, 1),
         ("MUTAG", 3, False, "nce", 20, 1, 0.001, 10, 42, 1e-3, 1),
+        ("NCI1", 2, True, "triplet", 128, 2, 0.01, 5, 0, None, 1),
+        ("NCI1", 3, False, "nce", 256, 1, 0.001, 10, 42, 1e-3, 1),
     ],
 )
 def test_train(
@@ -107,6 +111,8 @@ def test_train(
     [
         ("MUTAG", 5, 2, True, "triplet", 10, 2, 0.01, 5, 0, None, 1),
         ("MUTAG", 10, 3, False, "nce", 20, 1, 0.001, 10, 42, 1e-3, 1),
+        ("NCI1", 5, 2, True, "triplet", 128, 2, 0.01, 5, 0, None, 1),
+        ("NCI1", 10, 3, False, "nce", 256, 1, 0.001, 10, 42, 1e-3, 1),
     ],
 )
 def test_cross_validation(
