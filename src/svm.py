@@ -11,6 +11,7 @@ def svm(
     tree: WeisfeilerLemanLabelingTree,
     train_data: torch_geometric.datasets,
     test_data: torch_geometric.datasets,
+    gamma: float = 1.0,
 ) -> float:
     """train and test a support vector machine classifier
 
@@ -18,12 +19,13 @@ def svm(
         tree (WeisfeilerLemanLabelingTree): WLLT
         train_data (torch_geometric.datasets): training data
         test_data (torch_geometric.datasets): test data
+        gamma (float, optional): gamma parameter of the kernel. Defaults to 1.0.
 
     Returns:
         float: accuracy
     """
     distances_train = dataset_to_distance_matrix(tree, train_data)
-    kernel_train = torch.exp(-1 * distances_train)
+    kernel_train = torch.exp(-gamma * distances_train)
     clf = SVC(kernel="precomputed")
     clf.fit(kernel_train, train_data.y)
 
@@ -48,7 +50,7 @@ def svm(
             for i in range(len(test_data))
         ]
     )
-    kernel_test = torch.exp(-1 * distances_test)
+    kernel_test = torch.exp(-gamma * distances_test)
     pred = clf.predict(kernel_test)
     accuracy = (torch.tensor(pred) == test_data.y).sum().item() / len(test_data)
     return accuracy
@@ -59,6 +61,7 @@ def svm_cross_validation(
     data: torch_geometric.datasets,
     k: int = 10,
     random_state: int = 0,
+    gamma: float = 1.0,
 ) -> float:
     """perform k-fold cross validation of the support vector machine classifier
 
@@ -67,6 +70,7 @@ def svm_cross_validation(
         data (torch_geometric.datasets): Dataset
         k (int, optional): How many folds. Defaults to 10.
         random_state (int, optional): random seed. Defaults to 0.
+        gamma (float, optional): gamma parameter of the kernel. Defaults to 1.0.
 
     Returns:
         float: average accuracy
@@ -82,6 +86,6 @@ def svm_cross_validation(
         )
         train_data = data[train_indices]
         test_data = data[test_indices]
-        accuracy = svm(tree, train_data, test_data)
+        accuracy = svm(tree, train_data, test_data, gamma)
         accuracies.append(accuracy)
     return sum(accuracies) / k
