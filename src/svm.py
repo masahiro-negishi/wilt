@@ -12,7 +12,7 @@ def svm(
     train_data: torch_geometric.datasets,
     test_data: torch_geometric.datasets,
     gamma: float = 1.0,
-) -> float:
+) -> tuple[float, float]:
     """train and test a support vector machine classifier
 
     Args:
@@ -22,7 +22,7 @@ def svm(
         gamma (float, optional): gamma parameter of the kernel. Defaults to 1.0.
 
     Returns:
-        float: accuracy
+        tuple[float, float]: train accuracy and test accuracy
     """
     distances_train = dataset_to_distance_matrix(tree, train_data)
     kernel_train = torch.exp(-gamma * distances_train)
@@ -50,42 +50,13 @@ def svm(
             for i in range(len(test_data))
         ]
     )
+    train_pred = clf.predict(kernel_train)
+    train_accuracy = (torch.tensor(train_pred) == train_data.y).sum().item() / len(
+        train_data
+    )
     kernel_test = torch.exp(-gamma * distances_test)
-    pred = clf.predict(kernel_test)
-    accuracy = (torch.tensor(pred) == test_data.y).sum().item() / len(test_data)
-    return accuracy
-
-
-def svm_cross_validation(
-    tree: WeisfeilerLemanLabelingTree,
-    data: torch_geometric.datasets,
-    k: int = 10,
-    random_state: int = 0,
-    gamma: float = 1.0,
-) -> float:
-    """perform k-fold cross validation of the support vector machine classifier
-
-    Args:
-        tree (WeisfeilerLemanLabelingTree): WLLT
-        data (torch_geometric.datasets): Dataset
-        k (int, optional): How many folds. Defaults to 10.
-        random_state (int, optional): random seed. Defaults to 0.
-        gamma (float, optional): gamma parameter of the kernel. Defaults to 1.0.
-
-    Returns:
-        float: average accuracy
-    """
-    n = len(data)
-    torch.manual_seed(random_state)
-    indices = torch.randperm(n)
-    accuracies = []
-    for i in range(k):
-        test_indices = indices[i * (n // k) : (i + 1) * (n // k)]
-        train_indices = torch.cat(
-            [indices[: i * (n // k)], indices[(i + 1) * (n // k) :]]
-        )
-        train_data = data[train_indices]
-        test_data = data[test_indices]
-        accuracy = svm(tree, train_data, test_data, gamma)
-        accuracies.append(accuracy)
-    return sum(accuracies) / k
+    test_pred = clf.predict(kernel_test)
+    test_accuracy = (torch.tensor(test_pred) == test_data.y).sum().item() / len(
+        test_data
+    )
+    return train_accuracy, test_accuracy
