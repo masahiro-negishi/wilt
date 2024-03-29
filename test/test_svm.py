@@ -17,4 +17,10 @@ from tree import WeisfeilerLemanLabelingTree  # type: ignore
 def test_svm(dataset_name, depth, gamma):
     data = TUDataset(root=os.path.join(DATA_DIR, "TUDataset"), name=dataset_name)
     tree = WeisfeilerLemanLabelingTree(data, depth)
-    svm(tree, data[: len(data) // 2], data[len(data) // 2 :], gamma)
+    svm(
+        tree,
+        data[: len(data) // 2],
+        data[len(data) // 2 : len(data) * 3 // 4],
+        data[len(data) * 3 // 4 :],
+        gamma,
+    )

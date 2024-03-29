@@ -197,10 +197,11 @@ class WeisfeilerLemanLabelingTree:
         Returns:
             torch.Tensor: weight of each subtree in WWLLT
         """
-        weight = dist.clone()
-        for node_idx in range(self.n_nodes - 1, -1, -1):
-            weight[self.parent[node_idx]] += weight[node_idx]
-        return weight
+        # weight = dist.clone()
+        # for node_idx in range(self.n_nodes - 1, -1, -1):
+        #     weight[self.parent[node_idx]] += weight[node_idx]
+        # return weight
+        return dist
 
     def calc_distance_between_subtree_weights(
         self,
@@ -293,3 +294,30 @@ class WeisfeilerLemanLabelingTree:
             path (str): path to the file
         """
         self.parameter = torch.load(path)
+
+    def test_data_wwo_unseen_nodes(
+        self, train_data: Dataset, test_data: Dataset
+    ) -> tuple[Dataset, Dataset]:
+        """classify test data into ones with and without unseen nodes
+
+        Args:
+            train_data (Dataset): training data
+            test_data (Dataset): test data
+
+        Returns:
+            tuple[Dataset, Dataset]: test data without unseen nodes, test data with unseen nodes
+        """
+        train_seen = torch.zeros(len(self.parameter), dtype=torch.bool)
+        for graph in train_data:
+            train_dist = self.calc_distribution_on_tree(graph)
+            train_seen = torch.logical_or(train_seen, train_dist > 0)
+        train_unseen = torch.logical_not(train_seen)
+        test_seen_indices = []
+        test_unseen_indices = []
+        for i, graph in enumerate(test_data):
+            test_dist = self.calc_distribution_on_tree(graph)
+            if torch.any(torch.logical_and(test_dist > 0, train_unseen)):
+                test_unseen_indices.append(i)
+            else:
+                test_seen_indices.append(i)
+        return test_data[test_seen_indices], test_data[test_unseen_indices]
