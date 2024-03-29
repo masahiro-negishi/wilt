@@ -1,17 +1,17 @@
 import torch
-import torch_geometric.datasets  # type: ignore
+from torch_geometric.data import Dataset  # type: ignore
 
 from tree import WeisfeilerLemanLabelingTree
 
 
 def dataset_to_distance_matrix(
-    tree: WeisfeilerLemanLabelingTree, data: torch_geometric.datasets
+    tree: WeisfeilerLemanLabelingTree, data: Dataset
 ) -> torch.Tensor:
     """convert dataset to distance matrix
 
     Args:
         tree (WeisfeilerLemanLabelingTree): WLLT
-        data (torch_geometric.datasets): Dataset
+        data (Dataset): Dataset
 
     Returns:
         torch.Tensor: distance matrix

@@ -4,8 +4,8 @@ import matplotlib  # type: ignore
 import matplotlib.pyplot as plt  # type: ignore
 import numpy as np
 import torch
-import torch_geometric.datasets  # type: ignore
 from sklearn.manifold import TSNE  # type: ignore
+from torch_geometric.data import Dataset  # type: ignore
 
 from tree import WeisfeilerLemanLabelingTree
 from utils import dataset_to_distance_matrix
@@ -13,7 +13,7 @@ from utils import dataset_to_distance_matrix
 
 def tSNE(
     tree: WeisfeilerLemanLabelingTree,
-    data: torch_geometric.datasets,
+    data: Dataset,
     ax: matplotlib.axes.Axes,
     train_indices: np.ndarray,
     eval_indices: np.ndarray,
@@ -22,7 +22,7 @@ def tSNE(
 
     Args:
         tree (WeisfeilerLemanLabelingTree): WLLT
-        data (torch_geometric.datasets): Dataset
+        data (Dataset): Dataset
         ax (matplotlib.axes.Axes): Axes to draw the visualization
         train_indices (np.ndarray): Indices of the training data
         eval_indices (np.ndarray): Indices of the evaluation data
@@ -46,7 +46,7 @@ def tSNE(
 
 def intra_inter_distance(
     tree: WeisfeilerLemanLabelingTree,
-    data: torch_geometric.datasets,
+    data: Dataset,
     ax: matplotlib.axes.Axes,
     train_indices: np.ndarray,
     eval_indices: np.ndarray,
@@ -55,7 +55,7 @@ def intra_inter_distance(
 
     Args:
         tree (WeisfeilerLemanLabelingTree): WLLT
-        data (torch_geometric.datasets): Dataset
+        data (Dataset): Dataset
         ax (matplotlib.axes.Axes): Axes to draw the visualization
         train_indices (np.ndarray): Indices of the training data
         eval_indices (np.ndarray): Indices of the evaluation data

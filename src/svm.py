@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt  # type: ignore
 import torch
-import torch_geometric.datasets  # type: ignore
 from sklearn.svm import SVC  # type: ignore
+from torch_geometric.data import Dataset  # type: ignore
 
 from tree import WeisfeilerLemanLabelingTree
 from utils import dataset_to_distance_matrix
@@ -9,16 +9,16 @@ from utils import dataset_to_distance_matrix
 
 def svm(
     tree: WeisfeilerLemanLabelingTree,
-    train_data: torch_geometric.datasets,
-    test_data: torch_geometric.datasets,
+    train_data: Dataset,
+    test_data: Dataset,
     gamma: float = 1.0,
 ) -> tuple[float, float]:
     """train and test a support vector machine classifier
 
     Args:
         tree (WeisfeilerLemanLabelingTree): WLLT
-        train_data (torch_geometric.datasets): training data
-        test_data (torch_geometric.datasets): test data
+        train_data (Dataset): training data
+        test_data (Dataset): test data
         gamma (float, optional): gamma parameter of the kernel. Defaults to 1.0.
 
     Returns:
