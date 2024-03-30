@@ -1,7 +1,7 @@
 import os
 import sys
 
-import pytest
+import torch
 from torch_geometric.datasets import TUDataset  # type: ignore
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "../src"))
@@ -10,17 +10,16 @@ from svm import svm  # type: ignore
 from tree import WeisfeilerLemanLabelingTree  # type: ignore
 
 
-@pytest.mark.parametrize(
-    "dataset_name, depth, gamma",
-    [("MUTAG", 1, 1.0), ("MUTAG", 2, 0.1), ("NCI1", 1, 0.01), ("NCI1", 2, 10.0)],
-)
-def test_svm(dataset_name, depth, gamma):
+def test_svm(fixture_prepare_distances):
+    dataset_name, _, path = fixture_prepare_distances
     data = TUDataset(root=os.path.join(DATA_DIR, "TUDataset"), name=dataset_name)
-    tree = WeisfeilerLemanLabelingTree(data, depth)
+    distances = torch.load(path)
+    indices = list(range(len(data)))
     svm(
-        tree,
-        data[: len(data) // 2],
-        data[len(data) // 2 : len(data) * 3 // 4],
-        data[len(data) * 3 // 4 :],
-        gamma,
+        data,
+        indices[: len(data) // 2],
+        indices[len(data) // 2 : len(data) * 3 // 4],
+        indices[len(data) * 3 // 4 :],
+        distances,
+        1,
     )

@@ -296,17 +296,20 @@ class WeisfeilerLemanLabelingTree:
         self.parameter = torch.load(path)
 
     def test_data_wwo_unseen_nodes(
-        self, train_data: Dataset, test_data: Dataset
-    ) -> tuple[Dataset, Dataset]:
+        self, data: Dataset, train_indices: torch.Tensor, test_indices: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         """classify test data into ones with and without unseen nodes
 
         Args:
-            train_data (Dataset): training data
-            test_data (Dataset): test data
+            data (Dataset): Dataset
+            train_indices (torch.Tensor): indices of training data
+            test_indices (torch.Tensor): indices of test data
 
         Returns:
-            tuple[Dataset, Dataset]: test data without unseen nodes, test data with unseen nodes
+            tuple[torch.Tensor, torch.Tensor]: indices for test data without/with unseen nodes
         """
+        train_data = data[train_indices]
+        test_data = data[test_indices]
         train_seen = torch.zeros(len(self.parameter), dtype=torch.bool)
         for graph in train_data:
             train_dist = self.calc_distribution_on_tree(graph)
@@ -320,4 +323,7 @@ class WeisfeilerLemanLabelingTree:
                 test_unseen_indices.append(i)
             else:
                 test_seen_indices.append(i)
-        return test_data[test_seen_indices], test_data[test_unseen_indices]
+        return (
+            torch.Tensor(test_seen_indices).int(),
+            torch.Tensor(test_unseen_indices).int(),
+        )
