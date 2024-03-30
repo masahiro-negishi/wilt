@@ -324,6 +324,6 @@ class WeisfeilerLemanLabelingTree:
             else:
                 test_seen_indices.append(i)
         return (
-            torch.Tensor(test_seen_indices).int(),
-            torch.Tensor(test_unseen_indices).int(),
+            torch.tensor(test_seen_indices),
+            torch.tensor(test_unseen_indices),
         )

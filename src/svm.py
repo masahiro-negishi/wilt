@@ -26,9 +26,6 @@ def svm(
         tuple[float, float, float, float]: train accuracy, test_accuracy, test_seen_accuracy, test_unseen_accuracy
     """
     train_data = data[train_indices]
-    test_seen_data = data[test_seen_indices]
-    test_unseen_data = data[test_unseen_indices]
-
     distances_train = distances[train_indices][:, train_indices]
     kernel_train = torch.exp(-gamma * distances_train)
     clf = SVC(kernel="precomputed")
@@ -41,7 +38,8 @@ def svm(
     )
 
     # test seen accuracy
-    if len(test_seen_data) > 0:
+    if len(test_seen_indices) > 0:
+        test_seen_data = data[test_seen_indices]
         distances_test_seen = distances[test_seen_indices][:, train_indices]
         kernel_test_seen = torch.exp(-gamma * distances_test_seen)
         test_seen_pred = clf.predict(kernel_test_seen)
@@ -52,7 +50,8 @@ def svm(
         test_seen_accuracy = torch.nan
 
     # test unseen accuracy
-    if len(test_unseen_data) > 0:
+    if len(test_unseen_indices) > 0:
+        test_unseen_data = data[test_unseen_indices]
         distances_test_unseen = distances[test_unseen_indices][:, train_indices]
         kernel_test_unseen = torch.exp(-gamma * distances_test_unseen)
         test_unseen_pred = clf.predict(kernel_test_unseen)
