@@ -2,7 +2,6 @@ import os
 import sys
 
 import matplotlib.pyplot as plt  # type: ignore
-import pytest
 import torch
 from torch_geometric.datasets import TUDataset  # type: ignore
 

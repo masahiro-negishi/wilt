@@ -27,7 +27,7 @@ def tSNE(
         metric="precomputed",
         init="random",
         random_state=0,
-    ).fit_transform(distances)
+    ).fit_transform(distances[indices][:, indices])
     for i, c in enumerate(torch.unique(data.y)):
         class_indices = torch.where(data.y[indices] == c)[0]
         ax.scatter(
