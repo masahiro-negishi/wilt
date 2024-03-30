@@ -7,7 +7,6 @@ from torch_geometric.datasets import TUDataset  # type: ignore
 sys.path.append(os.path.join(os.path.dirname(__file__), "../src"))
 from path import DATA_DIR  # type: ignore
 from svm import svm  # type: ignore
-from tree import WeisfeilerLemanLabelingTree  # type: ignore
 
 
 def test_svm(fixture_prepare_distances):
