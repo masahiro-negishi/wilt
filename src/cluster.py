@@ -7,27 +7,21 @@ import torch
 from sklearn.manifold import TSNE  # type: ignore
 from torch_geometric.data import Dataset  # type: ignore
 
-from tree import WeisfeilerLemanLabelingTree
-from utils import dataset_to_distance_matrix
-
 
 def tSNE(
-    tree: WeisfeilerLemanLabelingTree,
     data: Dataset,
     ax: matplotlib.axes.Axes,
-    train_indices: np.ndarray,
-    eval_indices: np.ndarray,
+    indices: np.ndarray,
+    distances: torch.Tensor,
 ) -> None:
     """tSNE visualization
 
     Args:
-        tree (WeisfeilerLemanLabelingTree): WLLT
         data (Dataset): Dataset
         ax (matplotlib.axes.Axes): Axes to draw the visualization
-        train_indices (np.ndarray): Indices of the training data
-        eval_indices (np.ndarray): Indices of the evaluation data
+        indices (np.ndarray): Indices of the data
+        distances (torch.Tensor): distance matrix
     """
-    distances = dataset_to_distance_matrix(tree, data[train_indices])
     embedding = TSNE(
         n_components=2,
         metric="precomputed",
@@ -35,33 +29,33 @@ def tSNE(
         random_state=0,
     ).fit_transform(distances)
     for i, c in enumerate(torch.unique(data.y)):
-        indices = torch.where(data.y[train_indices] == c)[0]
+        class_indices = torch.where(data.y[indices] == c)[0]
         ax.scatter(
-            embedding[indices, 0],
-            embedding[indices, 1],
+            embedding[class_indices, 0],
+            embedding[class_indices, 1],
             color=plt.get_cmap("tab10").colors[i],
             label=f"class {c.item()}",
         )
 
 
 def intra_inter_distance(
-    tree: WeisfeilerLemanLabelingTree,
     data: Dataset,
     ax: matplotlib.axes.Axes,
     train_indices: np.ndarray,
     eval_indices: np.ndarray,
+    distances: torch.Tensor,
 ) -> None:
     """visualize distribution of intra and inter distances
 
     Args:
-        tree (WeisfeilerLemanLabelingTree): WLLT
         data (Dataset): Dataset
         ax (matplotlib.axes.Axes): Axes to draw the visualization
         train_indices (np.ndarray): Indices of the training data
         eval_indices (np.ndarray): Indices of the evaluation data
+        distances (torch.Tensor): distance matrix
     """
-    train_distances = dataset_to_distance_matrix(tree, data[train_indices])
-    eval_distances = dataset_to_distance_matrix(tree, data[eval_indices])
+    train_distances = distances[train_indices][:, train_indices]
+    eval_distances = distances[eval_indices][:, eval_indices]
     train_intra_distances = []
     train_inter_distances = []
     eval_intra_distances = []
