@@ -10,7 +10,7 @@ from path import DATA_DIR  # type: ignore
 from tree import WeisfeilerLemanLabelingTree  # type: ignore
 
 
-@pytest.fixture(scope="session", params=[("MUTAG", 1), ("MUTAG", 2)])
+@pytest.fixture(scope="session", params=[("MUTAG", 1), ("MUTAG", 2), ("NCI1", 1)])
 def fixture_prepare_distances(tmpdir_factory, request):
     data = TUDataset(root=os.path.join(DATA_DIR, "TUDataset"), name=request.param[0])
     tree = WeisfeilerLemanLabelingTree(data, request.param[1])
