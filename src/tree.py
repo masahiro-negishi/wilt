@@ -317,7 +317,7 @@ class WeisfeilerLemanLabelingTree:
         train_unseen = torch.logical_not(train_seen)
         test_seen_indices = []
         test_unseen_indices = []
-        for i, graph in enumerate(test_data):
+        for i, graph in zip(test_indices, test_data):
             test_dist = self.calc_distribution_on_tree(graph)
             if torch.any(torch.logical_and(test_dist > 0, train_unseen)):
                 test_unseen_indices.append(i)
