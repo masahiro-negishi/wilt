@@ -353,5 +353,8 @@ if __name__ == "__main__":
             RESULT_DIR,
             f"{args.dataset_name}_d={args.depth}_{norm}_{args.loss_name}_b={args.batch_size}_e={args.n_epochs}_lr={args.lr}_s={args.seed}_t={args.temperature}_c={args.clip_param_threshold}",
         )
-    os.makedirs(kwargs["path"], exist_ok=True)
+    if os.path.exists(kwargs["path"]):
+        print(f"{kwargs['path']} already exists")
+        exit()
+    os.makedirs(kwargs["path"])
     cross_validation(**kwargs)
