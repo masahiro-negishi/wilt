@@ -427,10 +427,15 @@ if __name__ == "__main__":
             RESULT_DIR,
             f"{args.dataset_name}_d={args.depth}_{norm}_{args.loss_name}_b={args.batch_size}_e={args.n_epochs}_lr={args.lr}_s={args.seed}_m={args.margin}_c={args.clip_param_threshold}",
         )
-    else:
+    elif args.loss_name == "nce":
         kwargs["path"] = os.path.join(
             RESULT_DIR,
             f"{args.dataset_name}_d={args.depth}_{norm}_{args.loss_name}_b={args.batch_size}_e={args.n_epochs}_lr={args.lr}_s={args.seed}_t={args.temperature}_c={args.clip_param_threshold}",
+        )
+    else:
+        kwargs["path"] = os.path.join(
+            RESULT_DIR,
+            f"{args.dataset_name}_d={args.depth}_{norm}_{args.loss_name}_b={args.batch_size}_e={args.n_epochs}_lr={args.lr}_s={args.seed}_t={args.temperature}_n={args.n_negative}_c={args.clip_param_threshold}",
         )
     if os.path.exists(kwargs["path"]):
         print(f"{kwargs['path']} already exists")
