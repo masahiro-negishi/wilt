@@ -109,3 +109,60 @@ class NCELoss(nn.Module):
                 )
             )
         )
+
+
+class InfoNCELoss(nn.Module):
+    """InfoNCE loss function
+
+    Attributes:
+        temperature (float): Temperature
+    """
+
+    def __init__(self, temperature: float):
+        """initialize InfoNCE loss function
+
+        Args:
+            temperature (float): hyperparameter for NCE loss
+        """
+        super().__init__()
+        self.temperature = temperature
+        self.clamp_threshold = 1e-10
+
+    def forward(
+        self,
+        tree: WeisfeilerLemanLabelingTree,
+        anchors: torch.Tensor,
+        positives: torch.Tensor,
+        negatives: torch.Tensor,
+    ) -> torch.Tensor:
+        """calculate InfoNCE loss
+
+        Args:
+            tree (WeisfeilerLemanLabelingTree): WLLT
+            anchors (torch.Tensor): anchor samples (B, D)
+            positives (torch.Tensor): positive samples (B, D)
+            negatives (torch.Tensor): negative samples (B, N, D)
+
+        Returns:
+            torch.Tensor: loss value
+        """
+        positive_distances = tree.calc_distance_between_subtree_weights(
+            anchors, positives
+        )  # (B,)
+        negative_distances = tree.calc_distance_between_subtree_weights(
+            anchors.unsqueeze(1).expand(negatives.shape), negatives
+        )  # (B, N)
+        positive_like = torch.clamp(
+            torch.exp(-positive_distances / self.temperature), self.clamp_threshold
+        )
+        negative_like = torch.clamp(
+            torch.exp(-negative_distances / self.temperature), self.clamp_threshold
+        )
+        return torch.mean(
+            -torch.log(
+                torch.clamp(
+                    positive_like / (positive_like + torch.sum(negative_like, dim=1)),
+                    min=self.clamp_threshold,
+                )
+            )
+        )
