@@ -327,3 +327,11 @@ class WeisfeilerLemanLabelingTree:
             torch.tensor(test_seen_indices),
             torch.tensor(test_unseen_indices),
         )
+
+    def train(self) -> None:
+        """set parameter to be trainable"""
+        self.parameter.requires_grad = True
+
+    def eval(self) -> None:
+        """set parameter to be untrainable"""
+        self.parameter.requires_grad = False

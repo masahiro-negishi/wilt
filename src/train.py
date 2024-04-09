@@ -127,7 +127,6 @@ def train(
         loss_fn: nn.Module = TripletLoss(margin=kwargs[hyperparameter])
     else:
         loss_fn = NCELoss(temperature=kwargs[hyperparameter])
-    tree.parameter.requires_grad = True
     optimizer = Adam([tree.parameter], lr=lr)
 
     os.makedirs(path, exist_ok=True)
@@ -148,6 +147,7 @@ def train(
     eval_subtree_weights = torch.vmap(tree.calc_subtree_weight)(eval_dists)
     for epoch in range(n_epochs):
         # training
+        tree.train()
         train_start = time.time()
         train_loss_sum = 0
         for indices in train_sampler:
@@ -169,6 +169,7 @@ def train(
         train_end = time.time()
         train_epoch_time += train_end - train_start
         # validation
+        tree.eval()
         eval_start = time.time()
         eval_loss_sum = 0
         for indices in eval_sampler:
