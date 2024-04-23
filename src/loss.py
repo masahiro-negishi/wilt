@@ -1,4 +1,5 @@
-import numpy as np
+from typing import Optional
+
 import torch
 from torch import nn
 
