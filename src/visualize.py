@@ -3,8 +3,6 @@ from typing import Optional
 import matplotlib.pyplot as plt  # type: ignore
 import networkx as nx  # type: ignore
 import torch
-import torch_geometric.utils as utils  # type: ignore
-from sklearn.manifold import TSNE  # type: ignore
 from torch_geometric.data import Data  # type: ignore
 
 from tree import WeisfeilerLemanLabelingTree
