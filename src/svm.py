@@ -1,4 +1,3 @@
-import matplotlib.pyplot as plt  # type: ignore
 import torch
 from sklearn.svm import SVC  # type: ignore
 from torch_geometric.data import Dataset  # type: ignore
