@@ -43,9 +43,11 @@ class TripletSampler(BatchSampler):
         self.batch_size = batch_size
         self.n_classes = len(torch.unique(dataset.y))
         self.n_samples = len(dataset)
-        self.positive_candidates: list[list[int]] = [[] for c in range(self.n_classes)]
-        self.negative_candidates: list[list[int]] = [[] for c in range(self.n_classes)]
-        self.idx2pos: list[int] = [-1 for _ in range(self.n_samples)]
+        self.positive_candidates: list[list[int]] = [[] for _ in range(self.n_classes)]
+        self.negative_candidates: list[list[int]] = [[] for _ in range(self.n_classes)]
+        self.idx2pos: list[int] = [
+            -1 for _ in range(self.n_samples)
+        ]  # position of each instance in positive_candidates
         for idx, graph in enumerate(dataset):
             for c in range(self.n_classes):
                 if graph.y == c:
@@ -57,13 +59,13 @@ class TripletSampler(BatchSampler):
     def __iter__(self):
         anchor_indices = torch.randperm(self.n_samples)
         positive_indices = [-1 for _ in range(self.n_samples)]
-        for anc in anchor_indices:
+        for i, anc in enumerate(anchor_indices):
             pidx = random.randint(
                 0, len(self.positive_candidates[self.dataset[anc].y]) - 2
             )
             if pidx >= self.idx2pos[anc]:
                 pidx += 1
-            positive_indices[anc] = self.positive_candidates[self.dataset[anc].y][pidx]
+            positive_indices[i] = self.positive_candidates[self.dataset[anc].y][pidx]
         negative_indices = [
             self.negative_candidates[self.dataset[anc].y][
                 random.randint(
@@ -89,6 +91,7 @@ class NPlusTwoSampler(BatchSampler):
     Attributes:
         dataset (Dataset): dataset to sample from
         batch_size (int): batch size
+        n_negative (int): number of negative samples
         n_classes (int): number of classes
         n_samples (int): number of samples in the dataset
         positive_candidates (list[list[int]]): positive_candidates[c] is a list of indices of instances belonging to class c
@@ -109,9 +112,11 @@ class NPlusTwoSampler(BatchSampler):
         self.n_negative = n_negative
         self.n_classes = len(torch.unique(dataset.y))
         self.n_samples = len(dataset)
-        self.positive_candidates: list[list[int]] = [[] for c in range(self.n_classes)]
-        self.negative_candidates: list[list[int]] = [[] for c in range(self.n_classes)]
-        self.idx2pos: list[int] = [-1 for _ in range(self.n_samples)]
+        self.positive_candidates: list[list[int]] = [[] for _ in range(self.n_classes)]
+        self.negative_candidates: list[list[int]] = [[] for _ in range(self.n_classes)]
+        self.idx2pos: list[int] = [
+            -1 for _ in range(self.n_samples)
+        ]  # position of each instance in positive_candidates
         for idx, graph in enumerate(dataset):
             for c in range(self.n_classes):
                 if graph.y == c:
@@ -123,13 +128,13 @@ class NPlusTwoSampler(BatchSampler):
     def __iter__(self):
         anchor_indices = torch.randperm(self.n_samples)
         positive_indices = [-1 for _ in range(self.n_samples)]
-        for anc in anchor_indices:
+        for i, anc in enumerate(anchor_indices):
             pidx = random.randint(
                 0, len(self.positive_candidates[self.dataset[anc].y]) - 2
             )
             if pidx >= self.idx2pos[anc]:
                 pidx += 1
-            positive_indices[anc] = self.positive_candidates[self.dataset[anc].y][pidx]
+            positive_indices[i] = self.positive_candidates[self.dataset[anc].y][pidx]
         negative_indices = [
             [
                 self.negative_candidates[self.dataset[anc].y][
@@ -137,7 +142,9 @@ class NPlusTwoSampler(BatchSampler):
                         0, len(self.negative_candidates[self.dataset[anc].y]) - 1
                     )
                 ]
-                for _ in range(self.n_negative)
+                for _ in range(
+                    self.n_negative
+                )  # the same negative sample can be selected multiple times
             ]
             for anc in anchor_indices
         ]
@@ -160,9 +167,9 @@ def train(
     batch_size: int,
     n_epochs: int,
     lr: float,
-    path: str,
     save_interval: int,
     seed: int,
+    path: str,
     clip_param_threshold: Optional[float] = None,
     **kwargs,
 ):
@@ -176,13 +183,12 @@ def train(
         batch_size (int): batch size
         n_epochs (int): number of epochs
         lr (float): learning rate
-        path (str): path to the directory to save the results
         save_interval (int): How often to save the model
         seed (int): random seed
+        path (str): path to the directory to save the results
         clip_param_threshold (Optional[float]): threshold for clipping the parameter
-        **kwargs: hyperparameter for loss function
+        **kwargs: hyperparameters for loss function
     """
-    hyperparameter = "margin" if loss_name == "triplet" else "temperature"
 
     # fix seed
     np.random.seed(seed)
@@ -196,13 +202,13 @@ def train(
         train_sampler: BatchSampler = TripletSampler(train_data, batch_size)
         eval_sampler: BatchSampler = TripletSampler(eval_data, batch_size)
         if loss_name == "triplet":
-            loss_fn: nn.Module = TripletLoss(margin=kwargs[hyperparameter])
+            loss_fn: nn.Module = TripletLoss(margin=kwargs["margin"])
         elif loss_name == "nce":
-            loss_fn = NCELoss(temperature=kwargs[hyperparameter])
+            loss_fn = NCELoss(temperature=kwargs["temperature"])
     elif loss_name == "infonce":
         train_sampler = NPlusTwoSampler(train_data, batch_size, kwargs["n_negative"])
         eval_sampler = NPlusTwoSampler(eval_data, batch_size, kwargs["n_negative"])
-        loss_fn = InfoNCELoss(temperature=kwargs[hyperparameter])
+        loss_fn = InfoNCELoss(temperature=kwargs["temperature"])
     else:
         train_sampler = BatchSampler(
             RandomSampler(train_data), batch_size, drop_last=False
@@ -211,10 +217,11 @@ def train(
             RandomSampler(eval_data), batch_size, drop_last=False
         )
         loss_fn = AllPairNCELoss(
-            temperature=kwargs[hyperparameter], alpha=kwargs["alpha"]
+            temperature=kwargs["temperature"], alpha=kwargs["alpha"]
         )
     optimizer = Adam([tree.parameter], lr=lr)
 
+    # save the initial model
     os.makedirs(path, exist_ok=True)
     torch.save(tree.parameter, os.path.join(path, f"model_0.pt"))
 
@@ -247,7 +254,7 @@ def train(
                     tree.parameter.data = torch.clamp(
                         tree.parameter, min=clip_param_threshold
                     )
-                train_loss_sum += loss.item() * len(anchor_indices)
+                train_loss_sum += loss.item() * len(anchors)
         else:
             for indices in train_sampler:
                 loss = loss_fn(
@@ -274,7 +281,7 @@ def train(
                 positives = eval_subtree_weights[positive_indices]
                 negatives = eval_subtree_weights[negative_indices]
                 loss = loss_fn(tree, anchors, positives, negatives)
-                eval_loss_sum += loss.item() * len(anchor_indices)
+                eval_loss_sum += loss.item() * len(anchors)
         else:
             for indices in eval_sampler:
                 loss = loss_fn(
@@ -328,9 +335,9 @@ def cross_validation(
     batch_size: int,
     n_epochs: int,
     lr: float,
-    path: str,
     save_interval: int,
     seed: int,
+    path: str,
     clip_param_threshold: Optional[float] = None,
     **kwargs,
 ):
@@ -345,11 +352,11 @@ def cross_validation(
         batch_size (int): batch size
         n_epochs (int): number of epochs
         lr (float): learning rate
-        path (str): path to the directory to save the results
         save_interval (int): How often to save the model
         seed (int): random seed
+        path (str): path to the directory to save the results
         clip_param_threshold (Optional[float]): threshold for clipping the parameter
-        **kwargs: hyperparameter for loss function
+        **kwargs: hyperparameters for loss function
     """
 
     data = TUDataset(root=os.path.join(DATA_DIR, "TUDataset"), name=dataset_name)
@@ -382,9 +389,9 @@ def cross_validation(
             batch_size,
             n_epochs,
             lr,
-            os.path.join(path, f"fold_{i}"),
             save_interval,
             seed,
+            os.path.join(path, f"fold_{i}"),
             clip_param_threshold,
             **kwargs,
         )
