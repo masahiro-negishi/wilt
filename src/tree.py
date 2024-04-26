@@ -30,10 +30,17 @@ class WeisfeilerLemanLabelingTree:
         |-- calc_subtree_weights
         |-- calc_distance_between_subtree_weights
 
-        load_parameter
+        test_data_wwo_unseen_nodes
 
+        reset_parameter
+        load_parameter
+        train
+        eval
     """
 
+    ##################
+    # initialization #
+    ##################
     def __init__(
         self, data: Dataset, depth: int, exp_parameter: bool = True, norm: bool = False
     ) -> None:
@@ -67,7 +74,9 @@ class WeisfeilerLemanLabelingTree:
 
     def _build_tree(self, data) -> None:
         """Build WLLT tree
-        data (Dataset): Dataset
+
+        Args:
+            data (Dataset): Dataset
         """
         cnt_nodes: list[int] = [
             0 for _ in range(self.depth + 1)
@@ -145,13 +154,9 @@ class WeisfeilerLemanLabelingTree:
         # weight
         self.reset_parameter()
 
-    @property
-    def weight(self) -> torch.Tensor:
-        if self.exp_parameter:
-            return torch.exp(self.parameter)
-        else:
-            return self.parameter
-
+    ########################
+    # distance calculation #
+    ########################
     def calc_subtree_weights(self, graph: Data) -> torch.Tensor:
         """calculate distribution on WLLT
 
@@ -240,23 +245,9 @@ class WeisfeilerLemanLabelingTree:
         )  # (batch_size, self.n_nodes)
         return self.calc_distance_between_subtree_weights(dist1, dist2)
 
-    def reset_parameter(self) -> None:
-        """reset parameter"""
-        if self.exp_parameter:
-            self.parameter: torch.Tensor = torch.zeros(
-                self.n_nodes, dtype=torch.float32
-            )
-        else:
-            self.parameter = torch.ones(self.n_nodes, dtype=torch.float32)
-
-    def load_parameter(self, path: str) -> None:
-        """load parameter from file
-
-        Args:
-            path (str): path to the file
-        """
-        self.parameter = torch.load(path)
-
+    ########################
+    # test data separation #
+    ########################
     def test_data_wwo_unseen_nodes(
         self, data: Dataset, train_indices: torch.Tensor, test_indices: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor]:
@@ -290,10 +281,29 @@ class WeisfeilerLemanLabelingTree:
             torch.tensor(test_unseen_indices),
         )
 
+    ##############
+    # parameters #
+    ##############
+    @property
+    def weight(self) -> torch.Tensor:
+        if self.exp_parameter:
+            return torch.exp(self.parameter)
+        else:
+            return self.parameter
+
+    def reset_parameter(self) -> None:
+        if self.exp_parameter:
+            self.parameter: torch.Tensor = torch.zeros(
+                self.n_nodes, dtype=torch.float32
+            )
+        else:
+            self.parameter = torch.ones(self.n_nodes, dtype=torch.float32)
+
+    def load_parameter(self, path: str) -> None:
+        self.parameter = torch.load(path)
+
     def train(self) -> None:
-        """set parameter to be trainable"""
         self.parameter.requires_grad = True
 
     def eval(self) -> None:
-        """set parameter to be untrainable"""
         self.parameter.requires_grad = False
