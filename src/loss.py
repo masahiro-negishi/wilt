@@ -96,18 +96,12 @@ class NCELoss(nn.Module):
         negative_distances = tree.calc_distance_between_subtree_weights(
             anchors, negatives
         )
-        positive_like = torch.clamp(
-            torch.exp(-positive_distances / self.temperature), self.clamp_threshold
-        )
-        negative_like = torch.clamp(
-            torch.exp(-negative_distances / self.temperature), self.clamp_threshold
-        )
+        positive_like = torch.exp(-positive_distances / self.temperature)
+        negative_like = torch.exp(-negative_distances / self.temperature)
         return torch.mean(
-            -torch.log(
-                torch.clamp(
-                    positive_like / (positive_like + negative_like),
-                    min=self.clamp_threshold,
-                )
+            positive_distances / self.temperature
+            + torch.log(
+                torch.clamp(positive_like + negative_like, min=self.clamp_threshold)
             )
         )
 
@@ -153,16 +147,13 @@ class InfoNCELoss(nn.Module):
         negative_distances = tree.calc_distance_between_subtree_weights(
             anchors.unsqueeze(1).expand(negatives.shape), negatives
         )  # (B, N)
-        positive_like = torch.clamp(
-            torch.exp(-positive_distances / self.temperature), self.clamp_threshold
-        )
-        negative_like = torch.clamp(
-            torch.exp(-negative_distances / self.temperature), self.clamp_threshold
-        )
+        positive_like = torch.exp(-positive_distances / self.temperature)
+        negative_like = torch.exp(-negative_distances / self.temperature)
         return torch.mean(
-            -torch.log(
+            positive_distances / self.temperature
+            + torch.log(
                 torch.clamp(
-                    positive_like / (positive_like + torch.sum(negative_like, dim=1)),
+                    positive_like + torch.sum(negative_like, dim=1),
                     min=self.clamp_threshold,
                 )
             )
@@ -198,8 +189,8 @@ class AllPairNCELoss(nn.Module):
 
         Args:
             tree (WeisfeilerLemanLabelingTree): WLLT
-            samples (torch.Tensor): samples
-            labels (torch.Tensor): labels
+            samples (torch.Tensor): X
+            labels (torch.Tensor): Y
 
         Returns:
             torch.Tensor: loss value
