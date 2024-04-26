@@ -15,11 +15,10 @@ def fixture_prepare_distances(tmpdir_factory, request):
     data = TUDataset(root=os.path.join(DATA_DIR, "TUDataset"), name=request.param[0])
     tree = WeisfeilerLemanLabelingTree(data, request.param[1])
     tree.eval()
-    dists = torch.stack(
-        [tree.calc_distribution_on_tree(graph) for graph in data],
+    subtree_weights = torch.stack(
+        [tree.calc_subtree_weights(graph) for graph in data],
         dim=0,
     )
-    subtree_weights = torch.vmap(tree.calc_subtree_weight)(dists)
     distances = torch.stack(
         [
             tree.calc_distance_between_subtree_weights(

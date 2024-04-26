@@ -223,14 +223,12 @@ def train(
     eval_loss_hist = []
     train_epoch_time: float = 0
     eval_epoch_time: float = 0
-    train_dists = torch.stack(
-        [tree.calc_distribution_on_tree(g) for g in train_data], dim=0
+    train_subtree_weights = torch.stack(
+        [tree.calc_subtree_weights(g) for g in train_data], dim=0
     )
-    train_subtree_weights = torch.vmap(tree.calc_subtree_weight)(train_dists)
-    eval_dists = torch.stack(
-        [tree.calc_distribution_on_tree(g) for g in eval_data], dim=0
+    eval_subtree_weights = torch.stack(
+        [tree.calc_subtree_weights(g) for g in eval_data], dim=0
     )
-    eval_subtree_weights = torch.vmap(tree.calc_subtree_weight)(eval_dists)
     for epoch in range(n_epochs):
         # training
         tree.train()

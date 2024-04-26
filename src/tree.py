@@ -1,24 +1,22 @@
 import torch
 from torch_geometric.data import Batch, Data, Dataset  # type: ignore
 
-from path import DATA_DIR
-
 
 class WeisfeilerLemanLabelingTree:
     """Weisfeiler Leman Labeling Tree
 
     Attributes:
-        depth (int): Number of layers in WWLLT
+        depth (int): Number of layers in WLLT
         exp_parameter (bool): Whether to set weight as exp(parameter)
         norm (bool): Whether to normalize the distribution
-        n_nodes (int): Number of nodes in WWLLT
-        parent (list[int]): Parent node of each node in WWLLT
+        n_nodes (int): Number of nodes in WLLT
+        parent (list[int]): Parent node of each node in WLLT
         attr2label (dict[int, int]): Mapping from attribute to label (for layer 0)
-        labeling_hash (dict[tuple[int, tuple[int, ...]], int]): Hash table of labelings (for layer 1 to layer depth)
-        parameter (torch.Tensor): Parameter of each edge in WWLLT
+        labeling_hash (dict[tuple[int, tuple[int, ...]], int]): Hash table of labelings (for layer 1, layer 2, ..., layer depth)
+        parameter (torch.Tensor): Parameter of each edge in WLLT
 
     Properties:
-        weight (torch.Tensor): Weight of each edge in WWLLT
+        weight (torch.Tensor): Weight of each edge in WLLT
 
     Structure:
         __init__
@@ -29,22 +27,21 @@ class WeisfeilerLemanLabelingTree:
         weight
 
         calc_distance_between_graphs
-        |-- calc_distribution_on_tree
-        |-- calc_distance_between_dists
-            |-- calc_subtree_weight
-            |-- calc_distance_between_subtree_weights
+        |-- calc_subtree_weights
+        |-- calc_distance_between_subtree_weights
 
         load_parameter
+
     """
 
     def __init__(
         self, data: Dataset, depth: int, exp_parameter: bool = True, norm: bool = False
     ) -> None:
-        """initialize WWLLT
+        """initialize WLLT
 
         Args:
             data (Dataset): Dataset
-            depth (int): Number of layers in WWLLT
+            depth (int): Number of layers in WLLT
             exp_parameter (bool, optional): Whether to set weight as exp(parameter). Defaults to True.
             norm (bool, optional): Whether to normalize the distribution. Defaults to False.
         """
@@ -65,11 +62,11 @@ class WeisfeilerLemanLabelingTree:
         """
         adj_list: list[list[int]] = [[] for _ in range(graph.num_nodes)]
         for u, v in graph.edge_index.T:
-            adj_list[u].append(v)
+            adj_list[u.item()].append(v.item())
         return adj_list
 
     def _build_tree(self, data) -> None:
-        """Build WWLLT treeexpt/expt1.sh
+        """Build WLLT tree
         data (Dataset): Dataset
         """
         cnt_nodes: list[int] = [
@@ -131,12 +128,16 @@ class WeisfeilerLemanLabelingTree:
                 self.parent[tuple2int[(layer_idx, label_idx)]] = tuple2int[
                     (layer_idx - 1, parent[layer_idx][label_idx])
                 ]
-        self.attr2label: dict[int, int] = {k: v + 1 for k, v in attr2label.items()}
+        self.attr2label: dict[int, int] = {
+            k: tuple2int[(1, v)] for k, v in attr2label.items()
+        }
         self.labeling_hash: dict[tuple[int, tuple[int, ...]], int] = {}
         for layer_idx in range(2, self.depth + 1):
             for key, val in labeling_hash[layer_idx].items():
                 label_idx = tuple2int[(layer_idx - 1, key[0])]
-                neighbors_idx = tuple([tuple2int[(layer_idx - 1, nx)] for nx in key[1]])
+                neighbors_idx = tuple(
+                    [tuple2int[(layer_idx - 1, nx)] for nx in key[1]]
+                )  # already sorted
                 self.labeling_hash[(label_idx, neighbors_idx)] = tuple2int[
                     (layer_idx, val)
                 ]
@@ -151,14 +152,14 @@ class WeisfeilerLemanLabelingTree:
         else:
             return self.parameter
 
-    def calc_distribution_on_tree(self, graph: Data) -> torch.Tensor:
-        """calculate distribution on WWLLT
+    def calc_subtree_weights(self, graph: Data) -> torch.Tensor:
+        """calculate distribution on WLLT
 
         Args:
             graph (Data): graph
 
         Returns:
-            torch.Tensor: distribution on WWLLT
+            torch.Tensor: distribution on WLLT
         """
         dist = torch.zeros(self.n_nodes, dtype=torch.float32)
         current_labeling: list[int] = [-1 for _ in range(graph.num_nodes)]
@@ -171,7 +172,7 @@ class WeisfeilerLemanLabelingTree:
         # adjancy_list
         adj_list: list[list[int]] = self._adjancy_list(graph)
         # iterative labeling
-        for d in range(2, self.depth + 1):
+        for _ in range(2, self.depth + 1):
             new_labeling: list[int] = [-1 for _ in range(graph.num_nodes)]
             for node_idx in range(graph.num_nodes):
                 # TODO: linear time sort
@@ -188,27 +189,12 @@ class WeisfeilerLemanLabelingTree:
             dist /= graph.num_nodes
         return dist
 
-    def calc_subtree_weight(self, dist: torch.Tensor) -> torch.Tensor:
-        """calculate weight of each subtree in WWLLT
-
-        Args:
-            dist (torch.Tensor): distribution on WWLLT
-
-        Returns:
-            torch.Tensor: weight of each subtree in WWLLT
-        """
-        # weight = dist.clone()
-        # for node_idx in range(self.n_nodes - 1, -1, -1):
-        #     weight[self.parent[node_idx]] += weight[node_idx]
-        # return weight
-        return dist
-
     def calc_distance_between_subtree_weights(
         self,
         weight1: torch.Tensor,
         weight2: torch.Tensor,
     ) -> torch.Tensor:
-        """calculate distance between two distributions on WWLLT
+        """calculate distance between two distributions on WLLT
 
         Args:
             weight1 (torch.Tensor): subtree_weight vector(s)
@@ -225,30 +211,6 @@ class WeisfeilerLemanLabelingTree:
         else:
             # batch execution
             return torch.abs(weight1 - weight2) @ self.weight  # (batch_size,)
-
-    def calc_distance_between_dists(
-        self,
-        dist1: torch.Tensor,
-        dist2: torch.Tensor,
-    ) -> torch.Tensor:
-        """calculate distance between two distributions on WWLLT
-
-        Args:
-            dist1 (torch.Tensor): distribution(s) on WWLLT
-            dist2 (torch.Tensor): distribution(s) on WWLLT
-
-        Returns:
-            torch.Tensor: distance(s)
-        """
-        if len(dist1.shape) == 1:
-            return self.calc_distance_between_subtree_weights(
-                self.calc_subtree_weight(dist1), self.calc_subtree_weight(dist2)
-            )
-        else:
-            return self.calc_distance_between_subtree_weights(
-                torch.vmap(self.calc_subtree_weight)(dist1),
-                torch.vmap(self.calc_subtree_weight)(dist2),
-            )
 
     def calc_distance_between_graphs(
         self,
@@ -271,12 +233,12 @@ class WeisfeilerLemanLabelingTree:
             graph1 = graph1.to_data_list()
             graph2 = graph2.to_data_list()
         dist1 = torch.stack(
-            [self.calc_distribution_on_tree(g) for g in graph1], dim=0
+            [self.calc_subtree_weights(g) for g in graph1], dim=0
         )  # (batch_size, self.n_nodes)
         dist2 = torch.stack(
-            [self.calc_distribution_on_tree(g) for g in graph2], dim=0
+            [self.calc_subtree_weights(g) for g in graph2], dim=0
         )  # (batch_size, self.n_nodes)
-        return self.calc_distance_between_dists(dist1, dist2)
+        return self.calc_distance_between_subtree_weights(dist1, dist2)
 
     def reset_parameter(self) -> None:
         """reset parameter"""
@@ -306,19 +268,19 @@ class WeisfeilerLemanLabelingTree:
             test_indices (torch.Tensor): indices of test data
 
         Returns:
-            tuple[torch.Tensor, torch.Tensor]: indices for test data without/with unseen nodes
+            tuple[torch.Tensor, torch.Tensor]: indices for test data with/without unseen nodes
         """
         train_data = data[train_indices]
         test_data = data[test_indices]
-        train_seen = torch.zeros(len(self.parameter), dtype=torch.bool)
+        train_seen = torch.zeros(self.n_nodes, dtype=torch.bool)
         for graph in train_data:
-            train_dist = self.calc_distribution_on_tree(graph)
+            train_dist = self.calc_subtree_weights(graph)
             train_seen = torch.logical_or(train_seen, train_dist > 0)
         train_unseen = torch.logical_not(train_seen)
         test_seen_indices = []
         test_unseen_indices = []
         for i, graph in zip(test_indices, test_data):
-            test_dist = self.calc_distribution_on_tree(graph)
+            test_dist = self.calc_subtree_weights(graph)
             if torch.any(torch.logical_and(test_dist > 0, train_unseen)):
                 test_unseen_indices.append(i)
             else:

@@ -30,19 +30,19 @@ def test_WeisfeilerLemanLabelingTree_init(dataset_name: str, depth: int, n_nodes
     "dataset_name, depth",
     [("MUTAG", 1), ("MUTAG", 3), ("NCI1", 1), ("NCI1", 3)],
 )
-def test_WeisfeilerLemanLabelingTree_calc_distance_between_dists(
+def test_WeisfeilerLemanLabelingTree_calc_distance_between_subtree_weights(
     dataset_name: str, depth: int
 ):
     data = TUDataset(root=os.path.join(DATA_DIR, "TUDataset"), name=dataset_name)
     tree = WeisfeilerLemanLabelingTree(data, depth)
     graph1 = torch.rand(3, tree.n_nodes)
     graph2 = torch.rand(3, tree.n_nodes)
-    distance = tree.calc_distance_between_dists(graph1, graph2)
+    distance = tree.calc_distance_between_subtree_weights(graph1, graph2)
     for d in distance:
         assert d >= 0
     graph1 = torch.rand(tree.n_nodes)
     graph2 = torch.rand(tree.n_nodes)
-    distance = tree.calc_distance_between_dists(graph1, graph2)
+    distance = tree.calc_distance_between_subtree_weights(graph1, graph2)
     assert d >= 0
 
 
