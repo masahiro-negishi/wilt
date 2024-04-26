@@ -167,3 +167,65 @@ class InfoNCELoss(nn.Module):
                 )
             )
         )
+
+
+class AllPairNCELoss(nn.Module):
+    """NCE loss function
+
+    Attributes:
+        temperature (float): Temperature
+    """
+
+    def __init__(self, temperature: float, alpha: float):
+        """initialize NCE loss function
+
+        Args:
+            temperature (float): hyperparameter for ALlPairNCE loss
+            alpha (float): hyperparameter for AllPairNCE loss
+        """
+        super().__init__()
+        self.temperature = temperature
+        self.alpha = alpha
+        self.clamp_threshold = 1e-10
+
+    def forward(
+        self,
+        tree: WeisfeilerLemanLabelingTree,
+        samples: torch.Tensor,
+        labels: torch.Tensor,
+    ) -> torch.Tensor:
+        """calculate NCE loss
+
+        Args:
+            tree (WeisfeilerLemanLabelingTree): WLLT
+            samples (torch.Tensor): samples
+            labels (torch.Tensor): labels
+
+        Returns:
+            torch.Tensor: loss value
+        """
+        n_samples = len(samples)
+        distances = tree.calc_distance_between_subtree_weights(
+            samples.repeat_interleave(n_samples, dim=0),
+            samples.repeat(n_samples, 1),
+        ).reshape(n_samples, n_samples)
+        kernels = torch.exp(-distances / self.temperature)
+        kernels_sum_same_label = (
+            torch.sum(kernels * (labels.reshape(-1, 1) == labels.reshape(1, -1)), dim=1)
+            - torch.diag(kernels)
+        ).reshape(-1, 1)
+        kernels_sum_diff_label = torch.sum(
+            kernels * (labels.reshape(-1, 1) != labels.reshape(1, -1)), dim=1
+        ).reshape(-1, 1)
+        return torch.mean(
+            (labels.reshape(-1, 1) == labels.reshape(1, -1))
+            * (
+                distances / self.temperature
+                + torch.log(
+                    torch.clamp(
+                        kernels_sum_same_label + self.alpha * kernels_sum_diff_label,
+                        min=self.clamp_threshold,
+                    )
+                )
+            )
+        )

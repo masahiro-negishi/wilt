@@ -30,7 +30,6 @@ from tree import WeisfeilerLemanLabelingTree  # type: ignore
 def test_TripletSampler(dataset_name: str, batch_size: int):
     data = TUDataset(root=os.path.join(DATA_DIR, "TUDataset"), name=dataset_name)
     sampler = TripletSampler(data, batch_size)
-    assert len(sampler) == len(data) // batch_size
     cnt_a = 0
     cnt_p = 0
     cnt_n = 0
@@ -38,7 +37,7 @@ def test_TripletSampler(dataset_name: str, batch_size: int):
         cnt_a += len(anchor_indices)
         cnt_p += len(positive_indices)
         cnt_n += len(negative_indices)
-        if i != len(sampler):
+        if i != len(sampler) - 1:
             assert (
                 len(anchor_indices)
                 == len(positive_indices)
@@ -60,7 +59,6 @@ def test_TripletSampler(dataset_name: str, batch_size: int):
 def test_NPlusTwoSampler(dataset_name: str, batch_size: int, n_negative: int):
     data = TUDataset(root=os.path.join(DATA_DIR, "TUDataset"), name=dataset_name)
     sampler = NPlusTwoSampler(data, batch_size, n_negative)
-    assert len(sampler) == len(data) // batch_size
     cnt_a = 0
     cnt_p = 0
     cnt_n = 0
@@ -68,7 +66,7 @@ def test_NPlusTwoSampler(dataset_name: str, batch_size: int, n_negative: int):
         cnt_a += len(anchor_indices)
         cnt_p += len(positive_indices)
         cnt_n += len(negative_indices)
-        if i != len(sampler):
+        if i != len(sampler) - 1:
             assert (
                 len(anchor_indices)
                 == len(positive_indices)
@@ -85,9 +83,11 @@ def test_NPlusTwoSampler(dataset_name: str, batch_size: int, n_negative: int):
         ("MUTAG", 2, True, "triplet", 10, 2, 0.01, 5, 0, None, 1),
         ("MUTAG", 3, False, "nce", 20, 1, 0.001, 10, 42, 1e-3, 1),
         ("MUTAG", 2, True, "infonce", 20, 2, 0.01, 5, 0, None, 1),
+        ("MUTAG", 2, False, "allpairnce", 188, 2, 0.01, 5, 0, None, 1),
         ("NCI1", 2, True, "triplet", 128, 2, 0.01, 5, 0, 1e-3, 1),
         ("NCI1", 3, False, "nce", 256, 1, 0.001, 10, 42, None, 1),
         ("NCI1", 2, True, "infonce", 256, 2, 0.01, 5, 0, 1e-3, 1),
+        ("NCI1", 2, True, "allpairnce", 256, 2, 0.01, 5, 0, 1e-3, 1),
     ],
 )
 def test_train(
@@ -140,7 +140,7 @@ def test_train(
             clip_param_threshold,
             temperature=hyperparameter,
         )
-    else:
+    elif loss_name == "infonce":
         train(
             train_data,
             eval_data,
@@ -155,6 +155,22 @@ def test_train(
             clip_param_threshold,
             temperature=hyperparameter,
             n_negative=10,
+        )
+    else:
+        train(
+            train_data,
+            eval_data,
+            tree,
+            loss_name,
+            batch_size,
+            n_epochs,
+            lr,
+            str(tmpdir),
+            save_interval,
+            seed,
+            clip_param_threshold,
+            temperature=hyperparameter,
+            alpha=1.0,
         )
     assert os.path.exists(os.path.join(str(tmpdir), "rslt.json"))
     assert os.path.exists(os.path.join(str(tmpdir), "loss.png"))
@@ -178,9 +194,11 @@ def test_train(
         ("MUTAG", 5, 2, True, "triplet", 10, 2, 0.01, 5, 0, None, 1),
         ("MUTAG", 10, 3, False, "nce", 20, 1, 0.001, 10, 42, 1e-3, 1),
         ("MUTAG", 5, 2, True, "infonce", 20, 2, 0.01, 5, 0, None, 1),
+        ("MUTAG", 5, 2, True, "allpairnce", 10, 2, 0.01, 5, 0, None, 1),
         ("NCI1", 5, 2, True, "triplet", 128, 2, 0.01, 5, 0, 1e-3, 1),
         ("NCI1", 10, 3, False, "nce", 256, 1, 0.001, 10, 42, None, 1),
         ("NCI1", 5, 2, True, "infonce", 256, 2, 0.01, 5, 0, 1e-3, 1),
+        ("NCI1", 5, 2, True, "allpairnce", 256, 2, 0.01, 5, 0, 1e-3, 1),
     ],
 )
 def test_cross_validation(
@@ -230,7 +248,7 @@ def test_cross_validation(
             clip_param_threshold,
             temperature=hyperparameter,
         )
-    else:
+    elif loss_name == "infonce":
         cross_validation(
             dataset_name,
             k_fold,
@@ -246,6 +264,23 @@ def test_cross_validation(
             clip_param_threshold,
             temperature=hyperparameter,
             n_negative=10,
+        )
+    else:
+        cross_validation(
+            dataset_name,
+            k_fold,
+            depth,
+            normalize,
+            loss_name,
+            batch_size,
+            n_epochs,
+            lr,
+            str(tmpdir),
+            save_interval,
+            seed,
+            clip_param_threshold,
+            temperature=hyperparameter,
+            alpha=1.0,
         )
     for i in range(k_fold):
         assert os.path.exists(os.path.join(str(tmpdir), f"fold_{i}", "rslt.json"))

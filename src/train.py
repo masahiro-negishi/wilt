@@ -10,16 +10,16 @@ import numpy as np
 import torch
 from torch import nn
 from torch.optim import Adam
-from torch.utils.data import Sampler
+from torch.utils.data import BatchSampler, RandomSampler
 from torch_geometric.data import Dataset  # type: ignore
 from torch_geometric.datasets import TUDataset  # type: ignore
 
-from loss import InfoNCELoss, NCELoss, TripletLoss
+from loss import AllPairNCELoss, InfoNCELoss, NCELoss, TripletLoss
 from path import DATA_DIR, RESULT_DIR  # type: ignore
 from tree import WeisfeilerLemanLabelingTree
 
 
-class TripletSampler(Sampler):
+class TripletSampler(BatchSampler):
     """Sampler for triplet data
 
     Attributes:
@@ -80,10 +80,10 @@ class TripletSampler(Sampler):
             ], negative_indices[i : i + self.batch_size]
 
     def __len__(self):
-        return len(self.dataset) // self.batch_size
+        return (len(self.dataset) + self.batch_size - 1) // self.batch_size
 
 
-class NPlusTwoSampler(Sampler):
+class NPlusTwoSampler(BatchSampler):
     """Sampler for anchor, positive, and multiple negative data
 
     Attributes:
@@ -149,7 +149,7 @@ class NPlusTwoSampler(Sampler):
             ], negative_indices[i : i + self.batch_size]
 
     def __len__(self):
-        return len(self.dataset) // self.batch_size
+        return (len(self.dataset) + self.batch_size - 1) // self.batch_size
 
 
 def train(
@@ -193,16 +193,26 @@ def train(
 
     # prepare sampler, loss function, and optimizer
     if loss_name in ["triplet", "nce"]:
-        train_sampler: Sampler = TripletSampler(train_data, batch_size)
-        eval_sampler: Sampler = TripletSampler(eval_data, batch_size)
+        train_sampler: BatchSampler = TripletSampler(train_data, batch_size)
+        eval_sampler: BatchSampler = TripletSampler(eval_data, batch_size)
         if loss_name == "triplet":
             loss_fn: nn.Module = TripletLoss(margin=kwargs[hyperparameter])
         elif loss_name == "nce":
             loss_fn = NCELoss(temperature=kwargs[hyperparameter])
-    else:
+    elif loss_name == "infonce":
         train_sampler = NPlusTwoSampler(train_data, batch_size, kwargs["n_negative"])
         eval_sampler = NPlusTwoSampler(eval_data, batch_size, kwargs["n_negative"])
         loss_fn = InfoNCELoss(temperature=kwargs[hyperparameter])
+    else:
+        train_sampler = BatchSampler(
+            RandomSampler(train_data), batch_size, drop_last=False
+        )
+        eval_sampler = BatchSampler(
+            RandomSampler(eval_data), batch_size, drop_last=False
+        )
+        loss_fn = AllPairNCELoss(
+            temperature=kwargs[hyperparameter], alpha=kwargs["alpha"]
+        )
     optimizer = Adam([tree.parameter], lr=lr)
 
     os.makedirs(path, exist_ok=True)
@@ -226,19 +236,33 @@ def train(
         tree.train()
         train_start = time.time()
         train_loss_sum = 0
-        for anchor_indices, positive_indices, negative_indices in train_sampler:
-            anchors = train_subtree_weights[anchor_indices]
-            positives = train_subtree_weights[positive_indices]
-            negatives = train_subtree_weights[negative_indices]
-            loss = loss_fn(tree, anchors, positives, negatives)
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-            if clip_param_threshold is not None:
-                tree.parameter.data = torch.clamp(
-                    tree.parameter, min=clip_param_threshold
+        if loss_name != "allpairnce":
+            for anchor_indices, positive_indices, negative_indices in train_sampler:
+                anchors = train_subtree_weights[anchor_indices]
+                positives = train_subtree_weights[positive_indices]
+                negatives = train_subtree_weights[negative_indices]
+                loss = loss_fn(tree, anchors, positives, negatives)
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+                if clip_param_threshold is not None:
+                    tree.parameter.data = torch.clamp(
+                        tree.parameter, min=clip_param_threshold
+                    )
+                train_loss_sum += loss.item() * len(anchor_indices)
+        else:
+            for indices in train_sampler:
+                loss = loss_fn(
+                    tree, train_subtree_weights[indices], train_data[indices].y
                 )
-            train_loss_sum += loss.item() * len(anchor_indices)
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+                if clip_param_threshold is not None:
+                    tree.parameter.data = torch.clamp(
+                        tree.parameter, min=clip_param_threshold
+                    )
+                train_loss_sum += loss.item() * len(indices)
         train_loss_hist.append(train_loss_sum / len(train_data))
         train_end = time.time()
         train_epoch_time += train_end - train_start
@@ -246,12 +270,19 @@ def train(
         tree.eval()
         eval_start = time.time()
         eval_loss_sum = 0
-        for anchor_indices, positive_indices, negative_indices in eval_sampler:
-            anchors = eval_subtree_weights[anchor_indices]
-            positives = eval_subtree_weights[positive_indices]
-            negatives = eval_subtree_weights[negative_indices]
-            loss = loss_fn(tree, anchors, positives, negatives)
-            eval_loss_sum += loss.item() * len(anchor_indices)
+        if loss_name != "allpairnce":
+            for anchor_indices, positive_indices, negative_indices in eval_sampler:
+                anchors = eval_subtree_weights[anchor_indices]
+                positives = eval_subtree_weights[positive_indices]
+                negatives = eval_subtree_weights[negative_indices]
+                loss = loss_fn(tree, anchors, positives, negatives)
+                eval_loss_sum += loss.item() * len(anchor_indices)
+        else:
+            for indices in eval_sampler:
+                loss = loss_fn(
+                    tree, eval_subtree_weights[indices], eval_data[indices].y
+                )
+                eval_loss_sum += loss.item() * len(indices)
         eval_loss_hist.append(eval_loss_sum / len(eval_data))
         eval_end = time.time()
         eval_epoch_time += eval_end - eval_start
@@ -381,9 +412,12 @@ def cross_validation(
         info["margin"] = kwargs["margin"]
     elif loss_name == "nce":
         info["temperature"] = kwargs["temperature"]
-    else:
+    elif loss_name == "infonce":
         info["temperature"] = kwargs["temperature"]
         info["n_negative"] = kwargs["n_negative"]
+    else:
+        info["temperature"] = kwargs["temperature"]
+        info["alpha"] = kwargs["alpha"]
     info["tree_time"] = tree_end - tree_start
     os.makedirs(path, exist_ok=True)
     with open(os.path.join(path, "info.json"), "w") as f:
@@ -396,7 +430,9 @@ if __name__ == "__main__":
     parser.add_argument("--k_fold", type=int)
     parser.add_argument("--depth", type=int)
     parser.add_argument("--normalize", action="store_true")
-    parser.add_argument("--loss_name", choices=["triplet", "nce", "infonce"])
+    parser.add_argument(
+        "--loss_name", choices=["triplet", "nce", "infonce", "allpairnce"]
+    )
     parser.add_argument("--batch_size", type=int)
     parser.add_argument("--n_epochs", type=int)
     parser.add_argument("--lr", type=float)
@@ -405,6 +441,7 @@ if __name__ == "__main__":
     parser.add_argument("--margin", type=float, required=False)
     parser.add_argument("--temperature", type=float, required=False)
     parser.add_argument("--n_negative", type=int, required=False)
+    parser.add_argument("--alpha", type=float, required=False)
     parser.add_argument("--clip_param_threshold", type=str, required=False)
     args = parser.parse_args()
     if args.clip_param_threshold is not None:
@@ -425,17 +462,34 @@ if __name__ == "__main__":
     if args.loss_name == "triplet":
         kwargs["path"] = os.path.join(
             RESULT_DIR,
-            f"{args.dataset_name}_d={args.depth}_{norm}_{args.loss_name}_b={args.batch_size}_e={args.n_epochs}_lr={args.lr}_s={args.seed}_m={args.margin}_c={args.clip_param_threshold}",
+            args.dataset_name,
+            args.loss_name,
+            f"d{args.depth}",
+            f"{norm}_b={args.batch_size}_e={args.n_epochs}_lr={args.lr}_s={args.seed}_m={args.margin}_c={args.clip_param_threshold}",
         )
     elif args.loss_name == "nce":
         kwargs["path"] = os.path.join(
             RESULT_DIR,
-            f"{args.dataset_name}_d={args.depth}_{norm}_{args.loss_name}_b={args.batch_size}_e={args.n_epochs}_lr={args.lr}_s={args.seed}_t={args.temperature}_c={args.clip_param_threshold}",
+            args.dataset_name,
+            args.loss_name,
+            f"d{args.depth}",
+            f"{norm}_b={args.batch_size}_e={args.n_epochs}_lr={args.lr}_s={args.seed}_t={args.temperature}_c={args.clip_param_threshold}",
+        )
+    elif args.loss_name == "infonce":
+        kwargs["path"] = os.path.join(
+            RESULT_DIR,
+            args.dataset_name,
+            args.loss_name,
+            f"d{args.depth}",
+            f"{norm}_b={args.batch_size}_e={args.n_epochs}_lr={args.lr}_s={args.seed}_t={args.temperature}_n={args.n_negative}_c={args.clip_param_threshold}",
         )
     else:
         kwargs["path"] = os.path.join(
             RESULT_DIR,
-            f"{args.dataset_name}_d={args.depth}_{norm}_{args.loss_name}_b={args.batch_size}_e={args.n_epochs}_lr={args.lr}_s={args.seed}_t={args.temperature}_n={args.n_negative}_c={args.clip_param_threshold}",
+            args.dataset_name,
+            args.loss_name,
+            f"d{args.depth}",
+            f"{norm}_b={args.batch_size}_e={args.n_epochs}_lr={args.lr}_s={args.seed}_t={args.temperature}_a={args.alpha}_c={args.clip_param_threshold}",
         )
     if os.path.exists(kwargs["path"]):
         print(f"{kwargs['path']} already exists")
