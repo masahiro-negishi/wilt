@@ -44,6 +44,7 @@ def intra_inter_distance(
     train_indices: np.ndarray,
     eval_indices: np.ndarray,
     distances: torch.Tensor,
+    bins: int,
 ) -> None:
     """visualize distribution of intra and inter distances
 
@@ -53,6 +54,7 @@ def intra_inter_distance(
         train_indices (np.ndarray): Indices of the training data
         eval_indices (np.ndarray): Indices of the evaluation data
         distances (torch.Tensor): distance matrix
+        bins (int): number of bins
     """
     train_distances = distances[train_indices][:, train_indices]
     eval_distances = distances[eval_indices][:, eval_indices]
@@ -92,14 +94,14 @@ def intra_inter_distance(
     )
     train_intra_hist, _, _ = ax.hist(
         [train_intra_distances, train_inter_distances],
-        bins=10,
+        bins=bins,
         range=(left, right),
         density=True,
         label=["train intra", "train inter"],
     )
     ax.hist(
         [eval_intra_distances, eval_inter_distances],
-        bins=10,
+        bins=bins,
         range=(left, right),
         density=True,
         bottom=np.max(train_intra_hist) * 1.1,

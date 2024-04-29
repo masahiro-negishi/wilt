@@ -27,6 +27,6 @@ def test_intra_inter_distance(fixture_prepare_distances):
     indices = list(range(len(data)))
     distances = torch.load(path)
     intra_inter_distance(
-        data, ax, indices[: len(data) // 2], indices[len(data) // 2 :], distances
+        data, ax, indices[: len(data) // 2], indices[len(data) // 2 :], distances, 10
     )
     plt.close(fig)
