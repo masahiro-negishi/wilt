@@ -232,13 +232,13 @@ def train(
     train_data: Dataset,
     eval_data: Dataset,
     tree: WeisfeilerLemanLabelingTree,
+    seed: int,
+    path: str,
     loss_name: str,
     batch_size: int,
     n_epochs: int,
     lr: float,
     save_interval: int,
-    seed: int,
-    path: str,
     clip_param_threshold: Optional[float] = None,
     **kwargs,
 ):
@@ -248,13 +248,13 @@ def train(
         train_data (Dataset): training dataset
         eval_data (Dataset): validation dataset
         tree (WeisfeilerLemanLabelingTree): WLLT
+        seed (int): random seed
+        path (str): path to the directory to save the results
         loss_name (str): name of the loss function
         batch_size (int): batch size
         n_epochs (int): number of epochs
         lr (float): learning rate
         save_interval (int): How often to save the model
-        seed (int): random seed
-        path (str): path to the directory to save the results
         clip_param_threshold (Optional[float]): threshold for clipping the parameter
         **kwargs: hyperparameters for loss function
     """
@@ -403,19 +403,39 @@ def train(
     torch.save(tree.parameter, os.path.join(path, "model_final.pt"))
 
 
+def train_linear(
+    train_data: Dataset,
+    eval_data: Dataset,
+    tree: WeisfeilerLemanLabelingTree,
+    seed: int,
+    path: str,
+    same_label: int,
+    diff_label: int,
+    n_samples: int,
+):
+    """train the model
+
+    Args:
+        train_data (Dataset): training dataset
+        eval_data (Dataset): validation dataset
+        tree (WeisfeilerLemanLabelingTree): WLLT
+        seed (int): random seed
+        path (str): path to the directory to save the results
+        same_label (int): target distance value for a pair of instances with the same label
+        diff_label (int): target distance value for a pair of instances with different labels
+        n_samples (int): number of pairs in train data
+    """
+    raise NotImplementedError
+
+
 def cross_validation(
     dataset_name: str,
     k_fold: int,
     depth: int,
     normalize: bool,
-    loss_name: str,
-    batch_size: int,
-    n_epochs: int,
-    lr: float,
-    save_interval: int,
     seed: int,
+    approach: str,
     path: str,
-    clip_param_threshold: Optional[float] = None,
     **kwargs,
 ):
     """train the model
@@ -425,22 +445,20 @@ def cross_validation(
         k_fold (int): number of splits
         depth (int): number of layers in the WLLT
         normalize (bool): whether to normalize the distribution on WLLT
-        loss_name (str): name of the loss function
-        batch_size (int): batch size
-        n_epochs (int): number of epochs
-        lr (float): learning rate
-        save_interval (int): How often to save the model
         seed (int): random seed
+        approach (str): contrastive or linear
         path (str): path to the directory to save the results
-        clip_param_threshold (Optional[float]): threshold for clipping the parameter
         **kwargs: hyperparameters for loss function
     """
 
     data = TUDataset(root=os.path.join(DATA_DIR, "TUDataset"), name=dataset_name)
     tree_start = time.time()
-    tree = WeisfeilerLemanLabelingTree(
-        data, depth, clip_param_threshold is None, normalize
-    )
+    if approach == "contrastive":
+        tree = WeisfeilerLemanLabelingTree(
+            data, depth, kwargs["clip_param_threshold"] is None, normalize
+        )
+    elif approach == "linear":
+        tree = WeisfeilerLemanLabelingTree(data, depth, False, normalize)
     tree_end = time.time()
     n_samples = len(data)
     indices = np.random.RandomState(seed=seed).permutation(n_samples)
@@ -461,20 +479,24 @@ def cross_validation(
         eval_data = data[
             indices[(i * n_samples) // k_fold : (i + 1) * n_samples // k_fold]
         ]
-        train(
-            train_data,
-            eval_data,
-            tree,
-            loss_name,
-            batch_size,
-            n_epochs,
-            lr,
-            save_interval,
-            seed,
-            os.path.join(path, f"fold_{i}"),
-            clip_param_threshold,
-            **kwargs,
-        )
+        if approach == "contrastive":
+            train(
+                train_data,
+                eval_data,
+                tree,
+                seed,
+                os.path.join(path, f"fold_{i}"),
+                **kwargs,
+            )
+        elif approach == "linear":
+            train_linear(
+                train_data,
+                eval_data,
+                tree,
+                seed,
+                os.path.join(path, f"fold_{i}"),
+                **kwargs,
+            )
         tree.reset_parameter()
 
     # save the training information
@@ -483,30 +505,39 @@ def cross_validation(
         "k_fold": k_fold,
         "depth": depth,
         "normalize": normalize,
-        "loss_name": loss_name,
-        "batch_size": batch_size,
-        "n_epochs": n_epochs,
-        "lr": lr,
-        "save_interval": save_interval,
         "seed": seed,
-        "clip_param_threshold": (
-            float(clip_param_threshold) if clip_param_threshold is not None else None
-        ),
     }
-    if loss_name == "triplet":
-        info["margin"] = kwargs["margin"]
-    elif loss_name == "nce":
-        info["temperature"] = kwargs["temperature"]
-    elif loss_name == "infonce":
-        info["temperature"] = kwargs["temperature"]
-        info["n_negative"] = kwargs["n_negative"]
-    elif loss_name == "allpairnce":
-        info["temperature"] = kwargs["temperature"]
-        info["alpha"] = kwargs["alpha"]
-    elif loss_name == "knnnce":
-        info["temperature"] = kwargs["temperature"]
-        info["alpha"] = kwargs["alpha"]
-        info["n_neighbors"] = kwargs["n_neighbors"]
+    if approach == "contrastive":
+        info["approach"] = "contrastive"
+        info["loss_name"] = kwargs["loss_name"]
+        info["batch_size"] = kwargs["batch_size"]
+        info["n_epochs"] = kwargs["n_epochs"]
+        info["lr"] = kwargs["lr"]
+        info["save_interval"] = kwargs["save_interval"]
+        info["clip_param_threshold"] = (
+            float(kwargs["clip_param_threshold"])
+            if kwargs["clip_param_threshold"] is not None
+            else None
+        )
+        if kwargs["loss_name"] == "triplet":
+            info["margin"] = kwargs["margin"]
+        elif kwargs["loss_name"] == "nce":
+            info["temperature"] = kwargs["temperature"]
+        elif kwargs["loss_name"] == "infonce":
+            info["temperature"] = kwargs["temperature"]
+            info["n_negative"] = kwargs["n_negative"]
+        elif kwargs["loss_name"] == "allpairnce":
+            info["temperature"] = kwargs["temperature"]
+            info["alpha"] = kwargs["alpha"]
+        elif kwargs["loss_name"] == "knnnce":
+            info["temperature"] = kwargs["temperature"]
+            info["alpha"] = kwargs["alpha"]
+            info["n_neighbors"] = kwargs["n_neighbors"]
+    elif approach == "linear":
+        info["approach"] = "linear"
+        info["same_label"] = kwargs["same_label"]
+        info["diff_label"] = kwargs["diff_label"]
+        info["n_samples"] = kwargs["n_samples"]
     info["tree_time"] = tree_end - tree_start
     os.makedirs(path, exist_ok=True)
     with open(os.path.join(path, "info.json"), "w") as f:
@@ -519,22 +550,32 @@ if __name__ == "__main__":
     parser.add_argument("--k_fold", type=int)
     parser.add_argument("--depth", type=int)
     parser.add_argument("--normalize", action="store_true")
-    parser.add_argument(
-        "--loss_name", choices=["triplet", "nce", "infonce", "allpairnce", "knnnce"]
-    )
-    parser.add_argument("--batch_size", type=int)
-    parser.add_argument("--n_epochs", type=int)
-    parser.add_argument("--lr", type=float)
-    parser.add_argument("--save_interval", type=int)
+    parser.add_argument("--approach", choices=["contrastive", "linear"])
     parser.add_argument("--seed", type=int)
+    # contrstive
+    parser.add_argument(
+        "--loss_name",
+        choices=["triplet", "nce", "infonce", "allpairnce", "knnnce"],
+        required=False,
+    )
+    parser.add_argument("--batch_size", type=int, required=False)
+    parser.add_argument("--n_epochs", type=int, required=False)
+    parser.add_argument("--lr", type=float, required=False)
+    parser.add_argument("--save_interval", type=int, required=False)
     parser.add_argument("--margin", type=float, required=False)
     parser.add_argument("--temperature", type=float, required=False)
     parser.add_argument("--n_negative", type=int, required=False)
     parser.add_argument("--alpha", type=float, required=False)
     parser.add_argument("--n_neighbors", type=int, required=False)
     parser.add_argument("--clip_param_threshold", type=str, required=False)
+    # linear
+    parser.add_argument("--same_label", type=int, required=False)
+    parser.add_argument("--diff_label", type=int, required=False)
+    parser.add_argument("--n_samples", type=int, required=False)
+
     args = parser.parse_args()
-    if args.clip_param_threshold is not None:
+
+    if args.approach == "contrastive" and args.clip_param_threshold is not None:
         if args.clip_param_threshold.lower() == "none":
             args.clip_param_threshold = None
         else:
@@ -547,50 +588,62 @@ if __name__ == "__main__":
                     raise ValueError(
                         f"Invalid value for clip_param_threshold: {args.clip_param_threshold}"
                     )
+
     kwargs = args.__dict__
     norm = "norm" if args.normalize else "unnorm"
-    if args.loss_name == "triplet":
+    if args.approach == "contrastive":
+        if args.loss_name == "triplet":
+            kwargs["path"] = os.path.join(
+                RESULT_DIR,
+                args.dataset_name,
+                args.loss_name,
+                f"d{args.depth}",
+                f"{norm}_b={args.batch_size}_e={args.n_epochs}_lr={args.lr}_s={args.seed}_m={args.margin}_c={args.clip_param_threshold}",
+            )
+        elif args.loss_name == "nce":
+            kwargs["path"] = os.path.join(
+                RESULT_DIR,
+                args.dataset_name,
+                args.loss_name,
+                f"d{args.depth}",
+                f"{norm}_b={args.batch_size}_e={args.n_epochs}_lr={args.lr}_s={args.seed}_t={args.temperature}_c={args.clip_param_threshold}",
+            )
+        elif args.loss_name == "infonce":
+            kwargs["path"] = os.path.join(
+                RESULT_DIR,
+                args.dataset_name,
+                args.loss_name,
+                f"d{args.depth}",
+                f"{norm}_b={args.batch_size}_e={args.n_epochs}_lr={args.lr}_s={args.seed}_t={args.temperature}_n={args.n_negative}_c={args.clip_param_threshold}",
+            )
+        elif args.loss_name == "allpairnce":
+            kwargs["path"] = os.path.join(
+                RESULT_DIR,
+                args.dataset_name,
+                args.loss_name,
+                f"d{args.depth}",
+                f"{norm}_b={args.batch_size}_e={args.n_epochs}_lr={args.lr}_s={args.seed}_t={args.temperature}_a={args.alpha}_c={args.clip_param_threshold}",
+            )
+        elif args.loss_name == "knnnce":
+            kwargs["path"] = os.path.join(
+                RESULT_DIR,
+                args.dataset_name,
+                args.loss_name,
+                f"d{args.depth}",
+                f"{norm}_b={args.batch_size}_e={args.n_epochs}_lr={args.lr}_s={args.seed}_t={args.temperature}_a={args.alpha}_nei={args.n_neighbors}_c={args.clip_param_threshold}",
+            )
+        else:
+            raise ValueError(f"Invalid loss name: {args.loss_name}")
+    elif args.approach == "linear":
         kwargs["path"] = os.path.join(
             RESULT_DIR,
             args.dataset_name,
-            args.loss_name,
+            "linear",
             f"d{args.depth}",
-            f"{norm}_b={args.batch_size}_e={args.n_epochs}_lr={args.lr}_s={args.seed}_m={args.margin}_c={args.clip_param_threshold}",
-        )
-    elif args.loss_name == "nce":
-        kwargs["path"] = os.path.join(
-            RESULT_DIR,
-            args.dataset_name,
-            args.loss_name,
-            f"d{args.depth}",
-            f"{norm}_b={args.batch_size}_e={args.n_epochs}_lr={args.lr}_s={args.seed}_t={args.temperature}_c={args.clip_param_threshold}",
-        )
-    elif args.loss_name == "infonce":
-        kwargs["path"] = os.path.join(
-            RESULT_DIR,
-            args.dataset_name,
-            args.loss_name,
-            f"d{args.depth}",
-            f"{norm}_b={args.batch_size}_e={args.n_epochs}_lr={args.lr}_s={args.seed}_t={args.temperature}_n={args.n_negative}_c={args.clip_param_threshold}",
-        )
-    elif args.loss_name == "allpairnce":
-        kwargs["path"] = os.path.join(
-            RESULT_DIR,
-            args.dataset_name,
-            args.loss_name,
-            f"d{args.depth}",
-            f"{norm}_b={args.batch_size}_e={args.n_epochs}_lr={args.lr}_s={args.seed}_t={args.temperature}_a={args.alpha}_c={args.clip_param_threshold}",
-        )
-    elif args.loss_name == "knnnce":
-        kwargs["path"] = os.path.join(
-            RESULT_DIR,
-            args.dataset_name,
-            args.loss_name,
-            f"d{args.depth}",
-            f"{norm}_b={args.batch_size}_e={args.n_epochs}_lr={args.lr}_s={args.seed}_t={args.temperature}_a={args.alpha}_nei={args.n_neighbors}_c={args.clip_param_threshold}",
+            f"{norm}_sl={args.same_label}_dl={args.diff_label}_n={args.n_samples}_s={args.seed}",
         )
     else:
-        raise ValueError(f"Invalid loss name: {args.loss_name}")
+        raise ValueError(f"Invalid approach: {args.approach}")
     if os.path.exists(os.path.join(kwargs["path"], "info.json")):
         print(f"{kwargs['path']} already exists")
         exit()
