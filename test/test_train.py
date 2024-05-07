@@ -1,6 +1,7 @@
 import os
 import sys
 
+import numpy as np
 import pytest
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "../src"))
@@ -84,10 +85,12 @@ def test_NPlusTwoSampler(dataset_name: str, batch_size: int, n_negative: int):
         ("MUTAG", 3, False, "nce", 20, 1, 0.001, 10, 42, 1e-3, 1),
         ("MUTAG", 2, True, "infonce", 20, 2, 0.01, 5, 0, None, 1),
         ("MUTAG", 2, False, "allpairnce", 188, 2, 0.01, 5, 0, None, 1),
+        ("MUTAG", 2, False, "knnnce", 188, 2, 0.01, 5, 0, None, 1),
         ("NCI1", 2, True, "triplet", 128, 2, 0.01, 5, 0, 1e-3, 1),
         ("NCI1", 3, False, "nce", 256, 1, 0.001, 10, 42, None, 1),
         ("NCI1", 2, True, "infonce", 256, 2, 0.01, 5, 0, 1e-3, 1),
         ("NCI1", 2, True, "allpairnce", 256, 2, 0.01, 5, 0, 1e-3, 1),
+        ("NCI1", 2, True, "knnnce", 256, 2, 0.01, 5, 0, 1e-3, 1),
     ],
 )
 def test_train(
@@ -105,6 +108,7 @@ def test_train(
     hyperparameter: float,
 ):
     data = TUDataset(root=os.path.join(DATA_DIR, "TUDataset"), name=dataset_name)
+    indices = np.random.RandomState(seed=seed).permutation(len(data))
     train_data = data[: len(data) // 2]
     eval_data = data[len(data) // 2 :]
     tree = WeisfeilerLemanLabelingTree(
@@ -156,6 +160,22 @@ def test_train(
             temperature=hyperparameter,
             n_negative=10,
         )
+    elif loss_name == "allpairnce":
+        train(
+            train_data,
+            eval_data,
+            tree,
+            loss_name,
+            batch_size,
+            n_epochs,
+            lr,
+            save_interval,
+            seed,
+            str(tmpdir),
+            clip_param_threshold,
+            temperature=hyperparameter,
+            alpha=1.0,
+        )
     else:
         train(
             train_data,
@@ -171,6 +191,7 @@ def test_train(
             clip_param_threshold,
             temperature=hyperparameter,
             alpha=1.0,
+            n_neighbors=10,
         )
     assert os.path.exists(os.path.join(str(tmpdir), "rslt.json"))
     assert os.path.exists(os.path.join(str(tmpdir), "loss.png"))
@@ -195,10 +216,12 @@ def test_train(
         ("MUTAG", 10, 3, False, "nce", 20, 1, 0.001, 10, 42, 1e-3, 1),
         ("MUTAG", 5, 2, True, "infonce", 20, 2, 0.01, 5, 0, None, 1),
         ("MUTAG", 5, 2, True, "allpairnce", 10, 2, 0.01, 5, 0, None, 1),
+        ("MUTAG", 5, 2, True, "knnnce", 10, 2, 0.01, 5, 0, None, 1),
         ("NCI1", 5, 2, True, "triplet", 128, 2, 0.01, 5, 0, 1e-3, 1),
         ("NCI1", 10, 3, False, "nce", 256, 1, 0.001, 10, 42, None, 1),
         ("NCI1", 5, 2, True, "infonce", 256, 2, 0.01, 5, 0, 1e-3, 1),
         ("NCI1", 5, 2, True, "allpairnce", 256, 2, 0.01, 5, 0, 1e-3, 1),
+        ("NCI1", 5, 2, True, "knnnce", 256, 2, 0.01, 5, 0, 1e-3, 1),
     ],
 )
 def test_cross_validation(
@@ -265,6 +288,23 @@ def test_cross_validation(
             temperature=hyperparameter,
             n_negative=10,
         )
+    elif loss_name == "allpairnce":
+        cross_validation(
+            dataset_name,
+            k_fold,
+            depth,
+            normalize,
+            loss_name,
+            batch_size,
+            n_epochs,
+            lr,
+            save_interval,
+            seed,
+            str(tmpdir),
+            clip_param_threshold,
+            temperature=hyperparameter,
+            alpha=1.0,
+        )
     else:
         cross_validation(
             dataset_name,
@@ -281,6 +321,7 @@ def test_cross_validation(
             clip_param_threshold,
             temperature=hyperparameter,
             alpha=1.0,
+            n_neighbors=10,
         )
     for i in range(k_fold):
         assert os.path.exists(os.path.join(str(tmpdir), f"fold_{i}", "rslt.json"))

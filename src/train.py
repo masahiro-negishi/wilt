@@ -14,7 +14,7 @@ from torch.utils.data import BatchSampler, RandomSampler
 from torch_geometric.data import Dataset  # type: ignore
 from torch_geometric.datasets import TUDataset  # type: ignore
 
-from loss import AllPairNCELoss, InfoNCELoss, NCELoss, TripletLoss
+from loss import AllPairNCELoss, InfoNCELoss, KnnNCELoss, NCELoss, TripletLoss
 from path import DATA_DIR, RESULT_DIR  # type: ignore
 from tree import WeisfeilerLemanLabelingTree
 
@@ -159,6 +159,75 @@ class NPlusTwoSampler(BatchSampler):
         return (len(self.dataset) + self.batch_size - 1) // self.batch_size
 
 
+class NeighborTripletSampler(BatchSampler):
+    """Sampler for triplet data whose positive sample is a neighbor of the anchor
+
+    Attributes:
+        dataset (Dataset): dataset to sample from
+        batch_size (int): batch size
+        n_neighbors (int): number of neighbors to consider
+        n_classes (int): number of classes
+        n_samples (int): number of samples in the dataset
+        positive_candidates (list[list[int]]): positive_candidates[c] is a list of indices of instances belonging to class c
+        negative_candidates (list[list[int]]): negative_candidates[c] is a list of indices of instances not belonging to class c
+        idx2pos (list[int]): where each instance is in positive_candidates
+    """
+
+    def __init__(self, dataset: Dataset, batch_size: int, n_neighbors: int) -> None:
+        """initialize the sampler
+
+        Args:
+            dataset (Dataset): dataset
+            batch_size (int): batch size
+            n_neighbors (int): number of neighbors to consider
+        """
+        self.dataset = dataset
+        self.batch_size = batch_size
+        self.n_neighbors = n_neighbors
+        self.n_classes = len(torch.unique(dataset.y))
+        self.n_samples = len(dataset)
+        self.positive_candidates: list[list[int]] = [[] for _ in range(self.n_classes)]
+        self.negative_candidates: list[list[int]] = [[] for _ in range(self.n_classes)]
+        self.idx2pos: list[int] = [
+            -1 for _ in range(self.n_samples)
+        ]  # position of each instance in positive_candidates
+        for idx, graph in enumerate(dataset):
+            for c in range(self.n_classes):
+                if graph.y == c:
+                    self.positive_candidates[c].append(idx)
+                    self.idx2pos[idx] = len(self.positive_candidates[c]) - 1
+                else:
+                    self.negative_candidates[c].append(idx)
+
+    def __iter__(self):
+        anchor_indices = torch.randperm(self.n_samples)
+        positive_indices = [-1 for _ in range(self.n_samples)]
+        for i, anc in enumerate(anchor_indices):
+            pidx = random.randint(
+                0, len(self.positive_candidates[self.dataset[anc].y]) - 2
+            )
+            if pidx >= self.idx2pos[anc]:
+                pidx += 1
+            positive_indices[i] = self.positive_candidates[self.dataset[anc].y][pidx]
+        negative_indices = [
+            self.negative_candidates[self.dataset[anc].y][
+                random.randint(
+                    0, len(self.negative_candidates[self.dataset[anc].y]) - 1
+                )
+            ]
+            for anc in anchor_indices
+        ]
+        positive_indices = torch.tensor(positive_indices)
+        negative_indices = torch.tensor(negative_indices)
+        for i in range(0, self.n_samples, self.batch_size):
+            yield anchor_indices[i : i + self.batch_size], positive_indices[
+                i : i + self.batch_size
+            ], negative_indices[i : i + self.batch_size]
+
+    def __len__(self):
+        return (len(self.dataset) + self.batch_size - 1) // self.batch_size
+
+
 def train(
     train_data: Dataset,
     eval_data: Dataset,
@@ -203,22 +272,30 @@ def train(
         eval_sampler: BatchSampler = TripletSampler(eval_data, batch_size)
         if loss_name == "triplet":
             loss_fn: nn.Module = TripletLoss(margin=kwargs["margin"])
-        elif loss_name == "nce":
+        else:
             loss_fn = NCELoss(temperature=kwargs["temperature"])
     elif loss_name == "infonce":
         train_sampler = NPlusTwoSampler(train_data, batch_size, kwargs["n_negative"])
         eval_sampler = NPlusTwoSampler(eval_data, batch_size, kwargs["n_negative"])
         loss_fn = InfoNCELoss(temperature=kwargs["temperature"])
-    else:
+    elif loss_name in ["allpairnce", "knnnce"]:
         train_sampler = BatchSampler(
             RandomSampler(train_data), batch_size, drop_last=False
         )
         eval_sampler = BatchSampler(
             RandomSampler(eval_data), batch_size, drop_last=False
         )
-        loss_fn = AllPairNCELoss(
-            temperature=kwargs["temperature"], alpha=kwargs["alpha"]
-        )
+        if loss_name == "allpairnce":
+            loss_fn = AllPairNCELoss(
+                temperature=kwargs["temperature"], alpha=kwargs["alpha"]
+            )
+        else:
+            assert kwargs["n_neighbors"] <= batch_size
+            loss_fn = KnnNCELoss(
+                temperature=kwargs["temperature"],
+                alpha=kwargs["alpha"],
+                n_neighbors=kwargs["n_neighbors"],
+            )
     optimizer = Adam([tree.parameter], lr=lr)
 
     # save the initial model
@@ -241,7 +318,7 @@ def train(
         tree.train()
         train_start = time.time()
         train_loss_sum = 0
-        if loss_name != "allpairnce":
+        if loss_name in ["triplet", "nce", "infonce"]:
             for anchor_indices, positive_indices, negative_indices in train_sampler:
                 anchors = train_subtree_weights[anchor_indices]
                 positives = train_subtree_weights[positive_indices]
@@ -275,7 +352,7 @@ def train(
         tree.eval()
         eval_start = time.time()
         eval_loss_sum = 0
-        if loss_name != "allpairnce":
+        if loss_name in ["triplet", "nce", "infonce"]:
             for anchor_indices, positive_indices, negative_indices in eval_sampler:
                 anchors = eval_subtree_weights[anchor_indices]
                 positives = eval_subtree_weights[positive_indices]
@@ -370,6 +447,9 @@ def cross_validation(
 
     # cross validation
     for i in range(k_fold):
+        if os.path.exists(os.path.join(path, f"fold_{i}", "rslt.json")):
+            print(f"{os.path.join(path, f'fold_{i}')} already exists")
+            continue
         train_data = data[
             np.concatenate(
                 (
@@ -420,9 +500,13 @@ def cross_validation(
     elif loss_name == "infonce":
         info["temperature"] = kwargs["temperature"]
         info["n_negative"] = kwargs["n_negative"]
-    else:
+    elif loss_name == "allpairnce":
         info["temperature"] = kwargs["temperature"]
         info["alpha"] = kwargs["alpha"]
+    elif loss_name == "knnnce":
+        info["temperature"] = kwargs["temperature"]
+        info["alpha"] = kwargs["alpha"]
+        info["n_neighbors"] = kwargs["n_neighbors"]
     info["tree_time"] = tree_end - tree_start
     os.makedirs(path, exist_ok=True)
     with open(os.path.join(path, "info.json"), "w") as f:
@@ -436,7 +520,7 @@ if __name__ == "__main__":
     parser.add_argument("--depth", type=int)
     parser.add_argument("--normalize", action="store_true")
     parser.add_argument(
-        "--loss_name", choices=["triplet", "nce", "infonce", "allpairnce"]
+        "--loss_name", choices=["triplet", "nce", "infonce", "allpairnce", "knnnce"]
     )
     parser.add_argument("--batch_size", type=int)
     parser.add_argument("--n_epochs", type=int)
@@ -447,6 +531,7 @@ if __name__ == "__main__":
     parser.add_argument("--temperature", type=float, required=False)
     parser.add_argument("--n_negative", type=int, required=False)
     parser.add_argument("--alpha", type=float, required=False)
+    parser.add_argument("--n_neighbors", type=int, required=False)
     parser.add_argument("--clip_param_threshold", type=str, required=False)
     args = parser.parse_args()
     if args.clip_param_threshold is not None:
@@ -488,7 +573,7 @@ if __name__ == "__main__":
             f"d{args.depth}",
             f"{norm}_b={args.batch_size}_e={args.n_epochs}_lr={args.lr}_s={args.seed}_t={args.temperature}_n={args.n_negative}_c={args.clip_param_threshold}",
         )
-    else:
+    elif args.loss_name == "allpairnce":
         kwargs["path"] = os.path.join(
             RESULT_DIR,
             args.dataset_name,
@@ -496,8 +581,18 @@ if __name__ == "__main__":
             f"d{args.depth}",
             f"{norm}_b={args.batch_size}_e={args.n_epochs}_lr={args.lr}_s={args.seed}_t={args.temperature}_a={args.alpha}_c={args.clip_param_threshold}",
         )
-    if os.path.exists(kwargs["path"]):
+    elif args.loss_name == "knnnce":
+        kwargs["path"] = os.path.join(
+            RESULT_DIR,
+            args.dataset_name,
+            args.loss_name,
+            f"d{args.depth}",
+            f"{norm}_b={args.batch_size}_e={args.n_epochs}_lr={args.lr}_s={args.seed}_t={args.temperature}_a={args.alpha}_nei={args.n_neighbors}_c={args.clip_param_threshold}",
+        )
+    else:
+        raise ValueError(f"Invalid loss name: {args.loss_name}")
+    if os.path.exists(os.path.join(kwargs["path"], "info.json")):
         print(f"{kwargs['path']} already exists")
         exit()
-    os.makedirs(kwargs["path"])
+    os.makedirs(kwargs["path"], exist_ok=True)
     cross_validation(**kwargs)
