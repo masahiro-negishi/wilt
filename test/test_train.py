@@ -243,9 +243,9 @@ def test_train_linear(
         n_samples,
     )
     assert os.path.exists(os.path.join(str(tmpdir), "rslt.json"))
-    assert os.path.exists(os.path.join(str(tmpdir), "model_final.pt"))
     os.remove(os.path.join(str(tmpdir), "rslt.json"))
-    os.remove(os.path.join(str(tmpdir), "model_final.pt"))
+    if os.path.exists(os.path.join(str(tmpdir), "model_final.pt")):
+        os.remove(os.path.join(str(tmpdir), "model_final.pt"))
 
 
 @pytest.mark.parametrize(

@@ -8,7 +8,9 @@ from typing import Optional
 import matplotlib.pyplot as plt  # type: ignore
 import numpy as np
 import torch
-from sklearn.linear_model import LinearRegression
+
+# from scipy.linalg import lstsq  # type: ignore
+from scipy.optimize import nnls  # type: ignore
 from torch import nn
 from torch.optim import Adam
 from torch.utils.data import BatchSampler, RandomSampler
@@ -409,21 +411,34 @@ def train_linear(
     )
 
     # train the model
-    train_start = time.time()
-    model = LinearRegression(fit_intercept=False, positive=False)
-    model.fit(X.detach().numpy(), y.detach().numpy())
-    train_end = time.time()
-    train_time = train_end - train_start
+    converged = False
+    maxiter = -1
+    for maxiter_cand in [100, 1000, 10000, 100000]:
+        maxiter = maxiter_cand
+        try:
+            train_start = time.time()
+            weight, _ = nnls(X, y, maxiter=maxiter)
+            train_end = time.time()
+            train_time = train_end - train_start
+            converged = True
+            break
+        except:
+            train_end = time.time()
+            train_time = train_end - train_start
+            continue
 
     # save the training information
     os.makedirs(path, exist_ok=True)
     info = {
         "train_time": train_time,
+        "converged": converged,
+        "maxiter": maxiter,
     }
     with open(os.path.join(path, "rslt.json"), "w") as f:
         json.dump(info, f)
     # save the model
-    torch.save(model.coef_, os.path.join(path, "model_final.pt"))
+    if converged:
+        torch.save(weight, os.path.join(path, "model_final.pt"))
 
 
 def cross_validation(
