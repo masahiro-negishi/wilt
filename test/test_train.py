@@ -15,6 +15,7 @@ from train import (  # type: ignore
     TripletSampler,
     cross_validation,
     train,
+    train_linear,
 )
 from tree import WeisfeilerLemanLabelingTree  # type: ignore
 
@@ -109,8 +110,8 @@ def test_train(
 ):
     data = TUDataset(root=os.path.join(DATA_DIR, "TUDataset"), name=dataset_name)
     indices = np.random.RandomState(seed=seed).permutation(len(data))
-    train_data = data[: len(data) // 2]
-    eval_data = data[len(data) // 2 :]
+    train_data = data[indices[: len(data) // 2]]
+    eval_data = data[indices[len(data) // 2 :]]
     tree = WeisfeilerLemanLabelingTree(
         data, depth, clip_param_threshold is None, normalize
     )
@@ -207,6 +208,44 @@ def test_train(
     os.remove(os.path.join(str(tmpdir), "model_final.pt"))
     for i in range(0, n_epochs // save_interval):
         os.remove(os.path.join(str(tmpdir), f"model_{(i+1) * save_interval}.pt"))
+
+
+@pytest.mark.parametrize(
+    "dataset_name, depth, normalize, seed, same_label, diff_label, n_samples",
+    [
+        ("MUTAG", 2, True, 0, 0, 10, 10),
+        ("MUTAG", 3, False, 42, 1, 100, None),
+        ("NCI1", 2, True, 0, 0, 10, 50),
+    ],
+)
+def test_train_linear(
+    tmpdir,
+    dataset_name: str,
+    depth: int,
+    normalize: bool,
+    seed: int,
+    same_label: int,
+    diff_label: int,
+    n_samples: Optional[int],
+):
+    data = TUDataset(root=os.path.join(DATA_DIR, "TUDataset"), name=dataset_name)
+    indices = np.random.RandomState(seed=seed).permutation(len(data))
+    train_data = data[indices[: len(data) // 2]]
+    # eval_data = data[indices[len(data) // 2 :]]
+    tree = WeisfeilerLemanLabelingTree(data, depth, False, normalize)
+    train_linear(
+        train_data,
+        tree,
+        seed,
+        str(tmpdir),
+        same_label,
+        diff_label,
+        n_samples,
+    )
+    assert os.path.exists(os.path.join(str(tmpdir), "rslt.json"))
+    assert os.path.exists(os.path.join(str(tmpdir), "model_final.pt"))
+    os.remove(os.path.join(str(tmpdir), "rslt.json"))
+    os.remove(os.path.join(str(tmpdir), "model_final.pt"))
 
 
 @pytest.mark.parametrize(

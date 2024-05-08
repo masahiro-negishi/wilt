@@ -8,6 +8,7 @@ from typing import Optional
 import matplotlib.pyplot as plt  # type: ignore
 import numpy as np
 import torch
+from sklearn.linear_model import LinearRegression
 from torch import nn
 from torch.optim import Adam
 from torch.utils.data import BatchSampler, RandomSampler
@@ -145,75 +146,6 @@ class NPlusTwoSampler(BatchSampler):
                 for _ in range(
                     self.n_negative
                 )  # the same negative sample can be selected multiple times
-            ]
-            for anc in anchor_indices
-        ]
-        positive_indices = torch.tensor(positive_indices)
-        negative_indices = torch.tensor(negative_indices)
-        for i in range(0, self.n_samples, self.batch_size):
-            yield anchor_indices[i : i + self.batch_size], positive_indices[
-                i : i + self.batch_size
-            ], negative_indices[i : i + self.batch_size]
-
-    def __len__(self):
-        return (len(self.dataset) + self.batch_size - 1) // self.batch_size
-
-
-class NeighborTripletSampler(BatchSampler):
-    """Sampler for triplet data whose positive sample is a neighbor of the anchor
-
-    Attributes:
-        dataset (Dataset): dataset to sample from
-        batch_size (int): batch size
-        n_neighbors (int): number of neighbors to consider
-        n_classes (int): number of classes
-        n_samples (int): number of samples in the dataset
-        positive_candidates (list[list[int]]): positive_candidates[c] is a list of indices of instances belonging to class c
-        negative_candidates (list[list[int]]): negative_candidates[c] is a list of indices of instances not belonging to class c
-        idx2pos (list[int]): where each instance is in positive_candidates
-    """
-
-    def __init__(self, dataset: Dataset, batch_size: int, n_neighbors: int) -> None:
-        """initialize the sampler
-
-        Args:
-            dataset (Dataset): dataset
-            batch_size (int): batch size
-            n_neighbors (int): number of neighbors to consider
-        """
-        self.dataset = dataset
-        self.batch_size = batch_size
-        self.n_neighbors = n_neighbors
-        self.n_classes = len(torch.unique(dataset.y))
-        self.n_samples = len(dataset)
-        self.positive_candidates: list[list[int]] = [[] for _ in range(self.n_classes)]
-        self.negative_candidates: list[list[int]] = [[] for _ in range(self.n_classes)]
-        self.idx2pos: list[int] = [
-            -1 for _ in range(self.n_samples)
-        ]  # position of each instance in positive_candidates
-        for idx, graph in enumerate(dataset):
-            for c in range(self.n_classes):
-                if graph.y == c:
-                    self.positive_candidates[c].append(idx)
-                    self.idx2pos[idx] = len(self.positive_candidates[c]) - 1
-                else:
-                    self.negative_candidates[c].append(idx)
-
-    def __iter__(self):
-        anchor_indices = torch.randperm(self.n_samples)
-        positive_indices = [-1 for _ in range(self.n_samples)]
-        for i, anc in enumerate(anchor_indices):
-            pidx = random.randint(
-                0, len(self.positive_candidates[self.dataset[anc].y]) - 2
-            )
-            if pidx >= self.idx2pos[anc]:
-                pidx += 1
-            positive_indices[i] = self.positive_candidates[self.dataset[anc].y][pidx]
-        negative_indices = [
-            self.negative_candidates[self.dataset[anc].y][
-                random.randint(
-                    0, len(self.negative_candidates[self.dataset[anc].y]) - 1
-                )
             ]
             for anc in anchor_indices
         ]
@@ -404,28 +336,94 @@ def train(
 
 
 def train_linear(
-    train_data: Dataset,
-    eval_data: Dataset,
+    train_all_data: Dataset,
     tree: WeisfeilerLemanLabelingTree,
     seed: int,
     path: str,
     same_label: int,
     diff_label: int,
-    n_samples: int,
+    n_samples: Optional[int],
 ):
     """train the model
 
     Args:
-        train_data (Dataset): training dataset
-        eval_data (Dataset): validation dataset
+        train_all_data (Dataset): training dataset
         tree (WeisfeilerLemanLabelingTree): WLLT
         seed (int): random seed
         path (str): path to the directory to save the results
         same_label (int): target distance value for a pair of instances with the same label
         diff_label (int): target distance value for a pair of instances with different labels
-        n_samples (int): number of pairs in train data
+        n_samples (int): number of samples to use for training
     """
-    raise NotImplementedError
+    # fix seed
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    random.seed(seed)
+    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic = True
+
+    # use only some of the training data
+    classes, _ = torch.sort(torch.unique(train_all_data.y))
+    assert len(classes) == 2  # only binary classification is supported
+    indices_neg = torch.where(train_all_data.y == classes[0])[0]
+    indices_pos = torch.where(train_all_data.y == classes[1])[0]
+    if n_samples is None:
+        n_samples = 2 * min(len(indices_neg), len(indices_pos))
+    train_neg = train_all_data[indices_neg[: n_samples // 2]]
+    train_pos = train_all_data[indices_pos[: n_samples // 2]]
+
+    # calculate distances
+    train_subtree_weights_neg = torch.stack(
+        [tree.calc_subtree_weights(g) for g in train_neg], dim=0
+    )
+    train_subtree_weights_pos = torch.stack(
+        [tree.calc_subtree_weights(g) for g in train_pos], dim=0
+    )
+    train_subtree_weights = torch.cat(
+        (train_subtree_weights_neg, train_subtree_weights_pos), dim=0
+    )
+    l1_neg = torch.abs(
+        train_subtree_weights[: n_samples // 2]
+        - train_subtree_weights[: n_samples // 2].unsqueeze(1)
+    )  # n_samples/2 * n_samples/2 * n_nodes
+    l1_pos = torch.abs(
+        train_subtree_weights[n_samples // 2 :]
+        - train_subtree_weights[n_samples // 2 :].unsqueeze(1)
+    )  # n_samples/2 * n_samples/2 * n_nodes
+    l1_cross = torch.abs(
+        train_subtree_weights[: n_samples // 2]
+        - train_subtree_weights[n_samples // 2 :].unsqueeze(1)
+    )  # n_samples/2 * n_samples/2 * n_nodes
+    indices_upper_triangular = torch.triu_indices(n_samples // 2, n_samples // 2, 1)
+    l1_neg_flat = l1_neg[indices_upper_triangular[0], indices_upper_triangular[1], :]
+    l1_pos_flat = l1_pos[indices_upper_triangular[0], indices_upper_triangular[1], :]
+    l1_cross_flat = l1_cross.reshape(-1, l1_cross.size(-1))
+    X = torch.cat((l1_neg_flat, l1_pos_flat, l1_cross_flat), dim=0)
+    y = torch.cat(
+        (
+            torch.full((l1_neg_flat.size(0),), same_label),
+            torch.full((l1_pos_flat.size(0),), same_label),
+            torch.full((l1_cross_flat.size(0),), diff_label),
+        ),
+        dim=0,
+    )
+
+    # train the model
+    train_start = time.time()
+    model = LinearRegression(fit_intercept=False, positive=False)
+    model.fit(X.detach().numpy(), y.detach().numpy())
+    train_end = time.time()
+    train_time = train_end - train_start
+
+    # save the training information
+    os.makedirs(path, exist_ok=True)
+    info = {
+        "train_time": train_time,
+    }
+    with open(os.path.join(path, "rslt.json"), "w") as f:
+        json.dump(info, f)
+    # save the model
+    torch.save(model.coef_, os.path.join(path, "model_final.pt"))
 
 
 def cross_validation(
@@ -491,7 +489,6 @@ def cross_validation(
         elif approach == "linear":
             train_linear(
                 train_data,
-                eval_data,
                 tree,
                 seed,
                 os.path.join(path, f"fold_{i}"),
@@ -546,32 +543,36 @@ def cross_validation(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+
     parser.add_argument("--dataset_name", choices=["MUTAG", "NCI1"])
     parser.add_argument("--k_fold", type=int)
     parser.add_argument("--depth", type=int)
     parser.add_argument("--normalize", action="store_true")
-    parser.add_argument("--approach", choices=["contrastive", "linear"])
     parser.add_argument("--seed", type=int)
+
+    subparsers = parser.add_subparsers(dest="approach")
     # contrstive
-    parser.add_argument(
+    contrastive_parser = subparsers.add_parser("contrastive")
+    contrastive_parser.add_argument(
         "--loss_name",
         choices=["triplet", "nce", "infonce", "allpairnce", "knnnce"],
         required=False,
     )
-    parser.add_argument("--batch_size", type=int, required=False)
-    parser.add_argument("--n_epochs", type=int, required=False)
-    parser.add_argument("--lr", type=float, required=False)
-    parser.add_argument("--save_interval", type=int, required=False)
-    parser.add_argument("--margin", type=float, required=False)
-    parser.add_argument("--temperature", type=float, required=False)
-    parser.add_argument("--n_negative", type=int, required=False)
-    parser.add_argument("--alpha", type=float, required=False)
-    parser.add_argument("--n_neighbors", type=int, required=False)
-    parser.add_argument("--clip_param_threshold", type=str, required=False)
+    contrastive_parser.add_argument("--batch_size", type=int, required=False)
+    contrastive_parser.add_argument("--n_epochs", type=int, required=False)
+    contrastive_parser.add_argument("--lr", type=float, required=False)
+    contrastive_parser.add_argument("--save_interval", type=int, required=False)
+    contrastive_parser.add_argument("--margin", type=float, required=False)
+    contrastive_parser.add_argument("--temperature", type=float, required=False)
+    contrastive_parser.add_argument("--n_negative", type=int, required=False)
+    contrastive_parser.add_argument("--alpha", type=float, required=False)
+    contrastive_parser.add_argument("--n_neighbors", type=int, required=False)
+    contrastive_parser.add_argument("--clip_param_threshold", type=str, required=False)
     # linear
-    parser.add_argument("--same_label", type=int, required=False)
-    parser.add_argument("--diff_label", type=int, required=False)
-    parser.add_argument("--n_samples", type=int, required=False)
+    linear_parser = subparsers.add_parser("linear")
+    linear_parser.add_argument("--same_label", type=int)
+    linear_parser.add_argument("--diff_label", type=int)
+    linear_parser.add_argument("--n_samples", type=int, required=False, default=None)
 
     args = parser.parse_args()
 
