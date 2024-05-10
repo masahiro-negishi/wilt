@@ -301,6 +301,7 @@ class WeisfeilerLemanLabelingTree:
 
     def load_parameter(self, path: str) -> None:
         self.parameter = torch.load(path)
+        self.parameter = self.parameter.to(torch.float32)
 
     def train(self) -> None:
         self.parameter.requires_grad = True
