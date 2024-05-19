@@ -4,6 +4,7 @@ data/
 rslt/
 anlys/
 expt/
+gnn/
 
 __pycache__/
 .mypy_cache/
