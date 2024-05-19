@@ -8,8 +8,6 @@ from typing import Optional
 import matplotlib.pyplot as plt  # type: ignore
 import numpy as np
 import torch
-
-# from scipy.linalg import lstsq  # type: ignore
 from scipy.optimize import nnls  # type: ignore
 from torch import nn
 from torch.optim import Adam
@@ -427,8 +425,26 @@ def train_linear(
             train_time = train_end - train_start
             continue
 
-    # save the training information
+    # display prediction
     os.makedirs(path, exist_ok=True)
+    if converged:
+        predicted = X @ weight
+        plt.scatter(
+            range(len(predicted[: l1_neg_flat.size(0) + l1_pos_flat.size(0)])),
+            predicted[: l1_neg_flat.size(0) + l1_pos_flat.size(0)],
+            label="same class",
+        )
+        plt.scatter(
+            range(len(predicted[l1_neg_flat.size(0) + l1_pos_flat.size(0) :])),
+            predicted[l1_neg_flat.size(0) + l1_pos_flat.size(0) :],
+            label="diff class",
+        )
+        plt.ylabel("Predicted distance")
+        plt.legend()
+        plt.savefig(os.path.join(path, "prediction.png"))
+        plt.close()
+
+    # save the training information
     info = {
         "train_time": train_time,
         "converged": converged,
@@ -436,9 +452,10 @@ def train_linear(
     }
     with open(os.path.join(path, "rslt.json"), "w") as f:
         json.dump(info, f)
+
     # save the model
     if converged:
-        torch.save(weight, os.path.join(path, "model_final.pt"))
+        torch.save(torch.from_numpy(weight), os.path.join(path, "model_final.pt"))
 
 
 def cross_validation(
