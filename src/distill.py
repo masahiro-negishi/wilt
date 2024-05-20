@@ -1,0 +1,529 @@
+import argparse
+import json
+import os
+import random
+import time
+from typing import Optional
+
+import matplotlib.pyplot as plt  # type: ignore
+import numpy as np
+import torch
+from scipy.optimize import nnls  # type: ignore
+from torch import nn
+from torch.optim import Adam
+from torch.utils.data import BatchSampler
+from torch_geometric.data import Dataset  # type: ignore
+from torch_geometric.datasets import TUDataset  # type: ignore
+
+from path import DATA_DIR, RESULT_DIR  # type: ignore
+from tree import WeisfeilerLemanLabelingTree
+
+
+class PairSampler(BatchSampler):
+    """Sampler for pairwise data
+
+    Attributes:
+        dataset (Dataset): dataset to sample from
+        batch_size (int): batch size
+        distances (torch.Tensor): distance matrix for supervision
+        train (bool): whether for training or not
+        all_pairs (torch.Tensor): all pairs of indices
+    """
+
+    def __init__(
+        self, dataset: Dataset, batch_size: int, distances: torch.Tensor, train: bool
+    ) -> None:
+        """initialize the sampler
+
+        Args:
+            dataset (Dataset): dataset
+            batch_size (int): batch size
+            distances (torch.Tensor): distance matrix for supervision
+            train (bool): whether for training or not
+        """
+        self.dataset = dataset
+        self.batch_size = batch_size
+        self.distances = distances
+        self.train = train
+        n_samples = len(dataset)
+        all_pairs = []
+        for i in range(n_samples):
+            for j in range(i + 1, n_samples):
+                all_pairs.append((i, j))
+        self.all_pairs = torch.tensor(all_pairs)  # (nC2, 2)
+
+    def __iter__(self):
+        if self.train:
+            indices = torch.randperm(len(self.all_pairs))
+        else:
+            indices = torch.arange(len(self.all_pairs))
+        for i in range(0, len(self.all_pairs), self.batch_size):
+            batch_pairs = self.all_pairs[indices[i : i + self.batch_size]]
+            yield batch_pairs[:, 0], batch_pairs[:, 1], self.distances[
+                batch_pairs[:, 0], batch_pairs[:, 1]
+            ]
+
+    def __len__(self):
+        return (len(self.all_pairs) + self.batch_size - 1) // self.batch_size
+
+
+def distance_scatter_plot(
+    tree: WeisfeilerLemanLabelingTree,
+    sampler: PairSampler,
+    subtree_weights: torch.Tensor,
+    path: str,
+) -> None:
+    """scatter plot of (approximated distance, ground truth distance)
+
+    Args:
+        tree (WeisfeilerLemanLabelingTree): WLLT
+        sampler (PairSampler): sampler for pairwise data
+        subtree_weights (torch.Tensor): subtree weights
+        path (str): path to save the plot
+    """
+    tree.eval()
+    ys_list = []
+    preds_list = []
+    for left_indices, right_indices, y in sampler:
+        left_weights = subtree_weights[left_indices]
+        right_weights = subtree_weights[right_indices]
+        prediction = tree.calc_distance_between_subtree_weights(
+            left_weights, right_weights
+        )
+        ys_list.append(y)
+        preds_list.append(prediction)
+    ys = torch.cat(ys_list)
+    preds = torch.cat(preds_list)
+    mean = torch.mean(torch.abs(preds - ys))
+    std = torch.std(torch.abs(preds - ys))
+    corr = torch.corrcoef(torch.stack([preds, ys], dim=0))
+    plt.scatter(preds, ys)
+    plt.plot(
+        range(int(max(torch.max(preds).item(), torch.max(ys).item()))),
+        range(int(max(torch.max(preds).item(), torch.max(ys).item()))),
+        color="red",
+    )
+    plt.xlabel("Prediction")
+    plt.ylabel("Ground truth")
+    plt.title("Error: {:.3f}±{:.3f}, Corr: {:.3f}".format(mean, std, corr[0, 1].item()))
+    plt.savefig(path)
+    plt.close()
+
+
+def train_gd(
+    train_data: Dataset,
+    eval_data: Dataset,
+    tree: WeisfeilerLemanLabelingTree,
+    seed: int,
+    path: str,
+    loss_name: str,
+    batch_size: int,
+    n_epochs: int,
+    lr: float,
+    save_interval: int,
+    clip_param_threshold: Optional[float],
+    train_distances: torch.Tensor,
+    eval_distances: torch.Tensor,
+):
+    """train the model with gradient descent
+
+    Args:
+        train_data (Dataset): training dataset
+        eval_data (Dataset): validation dataset
+        tree (WeisfeilerLemanLabelingTree): WLLT
+        seed (int): random seed
+        path (str): path to the directory to save the results
+        loss_name (str): name of the loss function
+        batch_size (int): batch size
+        n_epochs (int): number of epochs
+        lr (float): learning rate
+        save_interval (int): How often to save the model
+        clip_param_threshold (Optional[float]): threshold for clipping the parameter
+        train_distances (torch.Tensor): distance matrix for training
+        eval_distances (torch.Tensor): distance matrix for evaluation
+    """
+
+    # fix seed
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    random.seed(seed)
+    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic = True
+
+    # prepare sampler, loss function, and optimizer
+    train_sampler = PairSampler(train_data, batch_size, train_distances, train=True)
+    eval_sampler = PairSampler(eval_data, batch_size, eval_distances, train=False)
+    if loss_name == "l1":
+        loss_fn: nn.Module = torch.nn.L1Loss()
+    elif loss_name == "l2":
+        loss_fn = torch.nn.MSELoss()
+    optimizer = Adam([tree.parameter], lr=lr)
+
+    # save the initial model
+    os.makedirs(path, exist_ok=True)
+    torch.save(tree.parameter, os.path.join(path, f"model_0.pt"))
+
+    # train the model
+    train_loss_hist = []
+    eval_loss_hist = []
+    train_epoch_time: float = 0
+    eval_epoch_time: float = 0
+    train_subtree_weights = torch.stack(
+        [tree.calc_subtree_weights(g) for g in train_data], dim=0
+    )
+    eval_subtree_weights = torch.stack(
+        [tree.calc_subtree_weights(g) for g in eval_data], dim=0
+    )
+    for epoch in range(n_epochs):
+        # training
+        tree.train()
+        train_start = time.time()
+        train_loss_sum = 0
+        for left_indices, right_indices, y in train_sampler:
+            left_weights = train_subtree_weights[left_indices]
+            right_weights = train_subtree_weights[right_indices]
+            prediction = tree.calc_distance_between_subtree_weights(
+                left_weights, right_weights
+            )
+            loss = loss_fn(prediction, y)
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            if clip_param_threshold is not None:
+                tree.parameter.data = torch.clamp(
+                    tree.parameter, min=clip_param_threshold
+                )
+            train_loss_sum += loss.item() * len(y)
+        train_loss_hist.append(train_loss_sum / len(train_sampler.all_pairs))
+        train_end = time.time()
+        train_epoch_time += train_end - train_start
+        # validation
+        tree.eval()
+        eval_start = time.time()
+        eval_loss_sum = 0
+        for left_indices, right_indices, y in eval_sampler:
+            left_weights = eval_subtree_weights[left_indices]
+            right_weights = eval_subtree_weights[right_indices]
+            prediction = tree.calc_distance_between_subtree_weights(
+                left_weights, right_weights
+            )
+            loss = loss_fn(prediction, y)
+            eval_loss_sum += loss.item() * len(y)
+        eval_loss_hist.append(eval_loss_sum / len(eval_sampler.all_pairs))
+        eval_end = time.time()
+        eval_epoch_time += eval_end - eval_start
+
+        if (epoch + 1) % 10 == 0:
+            print(
+                f"Epoch {epoch + 1}/{n_epochs}, Train loss: {train_loss_hist[-1]}, Eval loss: {eval_loss_hist[-1]}"
+            )
+        if (epoch + 1) % save_interval == 0:
+            torch.save(tree.parameter, os.path.join(path, f"model_{epoch + 1}.pt"))
+    train_epoch_time /= n_epochs
+    eval_epoch_time /= n_epochs
+
+    # save the training information
+    info = {
+        "train_epoch_time": train_epoch_time,
+        "eval_epoch_time": eval_epoch_time,
+        "train_loss_history": train_loss_hist,
+        "eval_loss_history": eval_loss_hist,
+    }
+    with open(os.path.join(path, "rslt.json"), "w") as f:
+        json.dump(info, f)
+
+    # save the loss plot
+    plt.plot(train_loss_hist, label="Train")
+    plt.plot(eval_loss_hist, label="Eval")
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss")
+    plt.legend()
+    plt.savefig(os.path.join(path, "loss.png"))
+    plt.yscale("log")
+    plt.savefig(os.path.join(path, "loss_log.png"))
+    plt.close()
+
+    # catter plots
+    distance_scatter_plot(
+        tree,
+        train_sampler,
+        train_subtree_weights,
+        os.path.join(path, "scatter_train.png"),
+    )
+    distance_scatter_plot(
+        tree, eval_sampler, eval_subtree_weights, os.path.join(path, "scatter_eval.png")
+    )
+
+    # save the model
+    torch.save(tree.parameter, os.path.join(path, "model_final.pt"))
+
+
+def train_linear(
+    train_all_data: Dataset,
+    tree: WeisfeilerLemanLabelingTree,
+    seed: int,
+    path: str,
+    n_samples: Optional[int],
+    train_distances: torch.Tensor,
+):
+    """train the model
+
+    Args:
+        train_all_data (Dataset): training dataset
+        tree (WeisfeilerLemanLabelingTree): WLLT
+        seed (int): random seed
+        path (str): path to the directory to save the results
+        n_samples (Optional[int]): number of samples to use for training
+        train_distances (torch.Tensor): distance matrix calculated by GNN
+    """
+    # fix seed
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    random.seed(seed)
+    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic = True
+
+    # use only some of the training data
+    all_pairs = []
+    for i in range(len(train_all_data)):
+        for j in range(i + 1, len(train_all_data)):
+            all_pairs.append((i, j))
+    if n_samples is None:
+        pairs = all_pairs
+    else:
+        pairs = random.sample(all_pairs, n_samples)
+
+    # prepare X and y
+    left_indices = torch.tensor([pair[0] for pair in pairs])
+    right_indices = torch.tensor([pair[1] for pair in pairs])
+    train_subtree_weights = torch.stack(
+        [tree.calc_subtree_weights(g) for g in train_all_data], dim=0
+    )
+    X = torch.abs(
+        train_subtree_weights[left_indices] - train_subtree_weights[right_indices]
+    )
+    zero_column = torch.sum(X, dim=0) == 0
+    X = X[:, ~zero_column]
+    y = train_distances[left_indices, right_indices]
+
+    # train the model
+    converged = False
+    maxiter = -1
+    for maxiter_cand in [100, 1000, 10000, 100000]:
+        maxiter = maxiter_cand
+        try:
+            train_start = time.time()
+            weight, _ = nnls(X, y, maxiter=maxiter)
+            train_end = time.time()
+            train_time = train_end - train_start
+            converged = True
+            break
+        except:
+            train_end = time.time()
+            train_time = train_end - train_start
+            continue
+
+    # display prediction
+    os.makedirs(path, exist_ok=True)
+    if converged:
+        predicted = X @ weight
+        print(torch.abs(predicted - y).mean(), torch.abs(predicted - y).std())
+
+    # save the training information
+    info = {
+        "train_time": train_time,
+        "converged": converged,
+        "maxiter": maxiter,
+    }
+    with open(os.path.join(path, "rslt.json"), "w") as f:
+        json.dump(info, f)
+
+    # save the model
+    if converged:
+        torch.save(torch.from_numpy(weight), os.path.join(path, "model_final.pt"))
+
+
+def cross_validation(
+    dataset_name: str,
+    k_fold: int,
+    depth: int,
+    normalize: bool,
+    seed: int,
+    gnn: str,
+    approach: str,
+    path: str,
+    **kwargs,
+):
+    """train the model
+
+    Args:
+        dataset_name (str): dataset name
+        k_fold (int): number of splits
+        depth (int): number of layers in the WLLT
+        normalize (bool): whether to normalize the distribution on WLLT
+        seed (int): random seed
+        gnn (str): GNN model
+        approach (str): linear or gd
+        path (str): path to the directory to save the results
+        **kwargs: additional arguments
+    """
+
+    data = TUDataset(root=os.path.join(DATA_DIR, "TUDataset"), name=dataset_name)
+    tree_start = time.time()
+    if approach == "gd":
+        tree = WeisfeilerLemanLabelingTree(
+            data, depth, kwargs["clip_param_threshold"] is None, normalize
+        )
+    elif approach == "linear":
+        tree = WeisfeilerLemanLabelingTree(data, depth, False, normalize)
+    tree_end = time.time()
+    n_samples = len(data)
+    indices = np.random.RandomState(seed=seed).permutation(n_samples)
+
+    # cross validation
+    for i in range(k_fold):
+        if os.path.exists(os.path.join(path, f"fold_{i}", "rslt.json")):
+            print(f"{os.path.join(path, f'fold_{i}')} already exists")
+            continue
+        train_indices = np.concatenate(
+            (
+                indices[: (i * n_samples) // k_fold],
+                indices[(i + 1) * n_samples // k_fold :],
+            )
+        )
+        eval_indices = indices[
+            (i * n_samples) // k_fold : (i + 1) * n_samples // k_fold
+        ]
+        train_data = data[train_indices]
+        eval_data = data[eval_indices]
+        distances = torch.load(
+            os.path.join(
+                RESULT_DIR,
+                "../gnn",
+                f"{dataset_name}",
+                f"{gnn}",
+                f"fold{i}",
+                "dist_1.pt",
+            )
+        )
+        train_distances = distances[train_indices][:, train_indices]
+        eval_distances = distances[eval_indices][:, eval_indices]
+        if approach == "linear":
+            train_linear(
+                train_data,
+                tree,
+                seed,
+                os.path.join(path, f"fold_{i}"),
+                kwargs["n_samples"],
+                train_distances,
+            )
+        elif approach == "gd":
+            train_gd(
+                train_data,
+                eval_data,
+                tree,
+                seed,
+                os.path.join(path, f"fold_{i}"),
+                kwargs["loss_name"],
+                kwargs["batch_size"],
+                kwargs["n_epochs"],
+                kwargs["lr"],
+                kwargs["save_interval"],
+                kwargs["clip_param_threshold"],
+                train_distances,
+                eval_distances,
+            )
+        tree.reset_parameter()
+
+    # save the training information
+    info = {
+        "dataset_name": dataset_name,
+        "k_fold": k_fold,
+        "depth": depth,
+        "normalize": normalize,
+        "seed": seed,
+        "gnn": gnn,
+        "tree_time": tree_end - tree_start,
+    }
+    if approach == "linear":
+        info["approach"] = "linear"
+        info["n_samples"] = kwargs["n_samples"]
+    elif approach == "gd":
+        info["approach"] = "gd"
+        info["loss_name"] = kwargs["loss_name"]
+        info["batch_size"] = kwargs["batch_size"]
+        info["n_epochs"] = kwargs["n_epochs"]
+        info["lr"] = kwargs["lr"]
+        info["save_interval"] = kwargs["save_interval"]
+        info["clip_param_threshold"] = kwargs["clip_param_threshold"]
+    os.makedirs(path, exist_ok=True)
+    with open(os.path.join(path, "info.json"), "w") as f:
+        json.dump(info, f)
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument("--dataset_name", choices=["MUTAG", "NCI1"])
+    parser.add_argument("--k_fold", type=int)
+    parser.add_argument("--depth", type=int)
+    parser.add_argument("--normalize", action="store_true")
+    parser.add_argument("--seed", type=int)
+    parser.add_argument("--gnn", choices=["gcn", "gin", "gat"])
+
+    subparsers = parser.add_subparsers(dest="approach")
+    # linear
+    linear_parser = subparsers.add_parser("linear")
+    linear_parser.add_argument("--n_samples", type=int, required=False, default=None)
+    # gradient descent
+    gd_parser = subparsers.add_parser("gd")
+    gd_parser.add_argument("--loss_name", type=str, choices=["l1", "l2"])
+    gd_parser.add_argument("--batch_size", type=int)
+    gd_parser.add_argument("--n_epochs", type=int)
+    gd_parser.add_argument("--lr", type=float)
+    gd_parser.add_argument("--save_interval", type=int)
+    gd_parser.add_argument(
+        "--clip_param_threshold", type=str, required=False, default=None
+    )
+
+    args = parser.parse_args()
+
+    if args.approach == "gd" and args.clip_param_threshold is not None:
+        if args.clip_param_threshold.lower() == "none":
+            args.clip_param_threshold = None
+        else:
+            try:
+                args.clip_param_threshold = float(args.clip_param_threshold)
+            except:
+                if args.clip_param_threshold == "smallest_normal":
+                    args.clip_param_threshold = np.finfo(np.float32).smallest_normal
+                else:
+                    raise ValueError(
+                        f"Invalid value for clip_param_threshold: {args.clip_param_threshold}"
+                    )
+
+    kwargs = args.__dict__
+    norm = "norm" if args.normalize else "unnorm"
+
+    if args.approach == "linear":
+        kwargs["path"] = os.path.join(
+            RESULT_DIR,
+            args.dataset_name,
+            args.gnn,
+            f"d{args.depth}",
+            f"{norm}_n={args.n_samples}_s={args.seed}",
+        )
+    elif args.approach == "gd":
+        kwargs["path"] = os.path.join(
+            RESULT_DIR,
+            args.dataset_name,
+            args.gnn,
+            f"d{args.depth}",
+            f"{norm}_l={args.loss_name}_b={args.batch_size}_e={args.n_epochs}_lr={args.lr}_c={args.clip_param_threshold}_seed={args.seed}",
+        )
+
+    if os.path.exists(os.path.join(kwargs["path"], "info.json")):
+        print(f"{kwargs['path']} already exists")
+        exit()
+    os.makedirs(kwargs["path"], exist_ok=True)
+    cross_validation(**kwargs)
