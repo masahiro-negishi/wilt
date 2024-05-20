@@ -266,7 +266,7 @@ def train_linear(
     n_samples: Optional[int],
     train_distances: torch.Tensor,
 ):
-    """train the model
+    """train the model with non-negative least squares
 
     Args:
         train_all_data (Dataset): training dataset
@@ -354,7 +354,7 @@ def cross_validation(
     path: str,
     **kwargs,
 ):
-    """train the model
+    """train the model with cross validation
 
     Args:
         dataset_name (str): dataset name
