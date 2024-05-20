@@ -94,8 +94,8 @@ def distance_scatter_plot(
         preds_list.append(prediction)
     ys = torch.cat(ys_list)
     preds = torch.cat(preds_list)
-    mean = torch.mean(torch.abs(preds - ys))
-    std = torch.std(torch.abs(preds - ys))
+    mean = torch.mean(torch.abs(preds - ys) / ys)
+    std = torch.std(torch.abs(preds - ys) / ys)
     corr = torch.corrcoef(torch.stack([preds, ys], dim=0))
     plt.scatter(preds, ys)
     plt.plot(
