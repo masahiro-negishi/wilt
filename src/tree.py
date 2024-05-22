@@ -11,7 +11,7 @@ class WeisfeilerLemanLabelingTree:
         norm (bool): Whether to normalize the distribution
         n_nodes (int): Number of nodes in WLLT
         parent (list[int]): Parent node of each node in WLLT
-        attr2label (dict[int, int]): Mapping from attribute to label (for layer 0)
+        attr2label (dict[int, int]): Mapping from attribute to label (for layer 1)
         labeling_hash (dict[tuple[int, tuple[int, ...]], int]): Hash table of labelings (for layer 1, layer 2, ..., layer depth)
         parameter (torch.Tensor): Parameter of each edge in WLLT
 
@@ -58,18 +58,18 @@ class WeisfeilerLemanLabelingTree:
         assert self.depth > 0, "Depth should be greater than 0"
         self._build_tree(data)
 
-    def _adjancy_list(self, graph: Data) -> list[list[int]]:
+    def _adjancy_list(self, graph: Data) -> list[list[tuple[int, int]]]:
         """convert edge_index to adjancy list
 
         Args:
             graph (Data): graph
 
         Returns:
-            list[list[int]]: adjancy list
+            list[list[tuple[int, int]]]: adjancy list
         """
-        adj_list: list[list[int]] = [[] for _ in range(graph.num_nodes)]
-        for u, v in graph.edge_index.T:
-            adj_list[u.item()].append(v.item())
+        adj_list: list[list[tuple[int, int]]] = [[] for _ in range(graph.num_nodes)]
+        for idx, (u, v) in enumerate(graph.edge_index.T):
+            adj_list[u.item()].append((v.item(), idx))
         return adj_list
 
     def _build_tree(self, data) -> None:
@@ -85,7 +85,7 @@ class WeisfeilerLemanLabelingTree:
             [] for _ in range(self.depth + 1)
         ]  # parent[i][j] = parent node of node j in layer i (parent of root node is -1)
         attr2label: dict[int, int] = {}  # attr2label[i] = label of attribute i
-        labeling_hash: list[dict[tuple[int, tuple[int, ...]], int]] = [
+        labeling_hash: list[dict[tuple[int, tuple[tuple[int, int], ...]], int]] = [
             {} for _ in range(self.depth + 1)
         ]  # labeling_hash[i] = dict of labelings in layer i (labeling_hash[0] is not used)
 
@@ -104,16 +104,24 @@ class WeisfeilerLemanLabelingTree:
                     parent[1].append(0)  # root node
                 current_labeling[node_idx] = attr2label[node_attr.item()]
             # adjancy_list # O(|V| + |E|)
-            adj_list: list[list[int]] = self._adjancy_list(g)
+            adj_list: list[list[tuple[int, int]]] = self._adjancy_list(g)
             # iterative labeling # O(self.depth * |V| * log|E|)
             for d in range(2, self.depth + 1):
                 new_labeling: list[int] = [-1 for _ in range(g.num_nodes)]
                 for node_idx in range(g.num_nodes):
                     # TODO: linear time sort
-                    idx: tuple[int, tuple[int, ...]] = (
+                    idx: tuple[int, tuple[tuple[int, int], ...]] = (
                         current_labeling[node_idx],
                         tuple(
-                            sorted([current_labeling[nx] for nx in adj_list[node_idx]])
+                            sorted(
+                                [
+                                    (
+                                        current_labeling[nv],
+                                        int(torch.argmax(g.edge_attr[edge_idx]).item()),
+                                    )
+                                    for nv, edge_idx in adj_list[node_idx]
+                                ]
+                            )
                         ),
                     )
                     if labeling_hash[d].get(idx) is None:
@@ -122,7 +130,7 @@ class WeisfeilerLemanLabelingTree:
                         parent[d].append(current_labeling[node_idx])
                     new_labeling[node_idx] = labeling_hash[d][idx]
                 current_labeling = new_labeling
-
+        print(cnt_nodes)
         # relabeling
         tuple2int: dict[tuple[int, int], int] = {}
         n_nodes = 0
@@ -140,12 +148,15 @@ class WeisfeilerLemanLabelingTree:
         self.attr2label: dict[int, int] = {
             k: tuple2int[(1, v)] for k, v in attr2label.items()
         }
-        self.labeling_hash: dict[tuple[int, tuple[int, ...]], int] = {}
+        self.labeling_hash: dict[tuple[int, tuple[tuple[int, int], ...]], int] = {}
         for layer_idx in range(2, self.depth + 1):
             for key, val in labeling_hash[layer_idx].items():
                 label_idx = tuple2int[(layer_idx - 1, key[0])]
                 neighbors_idx = tuple(
-                    [tuple2int[(layer_idx - 1, nx)] for nx in key[1]]
+                    [
+                        (tuple2int[(layer_idx - 1, nv)], edge_idx)
+                        for nv, edge_idx in key[1]
+                    ]
                 )  # already sorted
                 self.labeling_hash[(label_idx, neighbors_idx)] = tuple2int[
                     (layer_idx, val)
@@ -175,15 +186,25 @@ class WeisfeilerLemanLabelingTree:
             current_labeling[node_idx] = self.attr2label[node_attr.item()]
             dist[self.attr2label[node_attr.item()]] += 1
         # adjancy_list
-        adj_list: list[list[int]] = self._adjancy_list(graph)
+        adj_list: list[list[tuple[int, int]]] = self._adjancy_list(graph)
         # iterative labeling
         for _ in range(2, self.depth + 1):
             new_labeling: list[int] = [-1 for _ in range(graph.num_nodes)]
             for node_idx in range(graph.num_nodes):
                 # TODO: linear time sort
-                idx: tuple[int, tuple[int, ...]] = (
+                idx: tuple[int, tuple[tuple[int, int], ...]] = (
                     current_labeling[node_idx],
-                    tuple(sorted([current_labeling[nx] for nx in adj_list[node_idx]])),
+                    tuple(
+                        sorted(
+                            [
+                                (
+                                    current_labeling[nx],
+                                    int(torch.argmax(graph.edge_attr[edge_idx]).item()),
+                                )
+                                for nx, edge_idx in adj_list[node_idx]
+                            ]
+                        )
+                    ),
                 )
                 new_labeling[node_idx] = self.labeling_hash[idx]
                 dist[self.labeling_hash[idx]] += 1

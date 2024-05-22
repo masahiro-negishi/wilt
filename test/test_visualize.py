@@ -12,7 +12,12 @@ from visualize import visualize_graph, visualize_WLLT  # type: ignore
 
 @pytest.mark.parametrize(
     "dataset_name, depth, withweight",
-    [("MUTAG", 2, True), ("MUTAG", 3, False), ("NCI1", 1, True), ("NCI1", 2, False)],
+    [
+        ("MUTAG", 2, True),
+        ("MUTAG", 3, False),
+        ("Mutagenicity", 1, True),
+        ("Mutagenicity", 2, False),
+    ],
 )
 def test_visualize_WLLT(tmpdir, dataset_name: str, depth: int, withweight: bool):
     data = TUDataset(root=os.path.join(DATA_DIR, "TUDataset"), name=dataset_name)
@@ -26,7 +31,7 @@ def test_visualize_WLLT(tmpdir, dataset_name: str, depth: int, withweight: bool)
     [
         ("MUTAG", None),
         ("MUTAG", {0: "C", 1: "N", 2: "O", 3: "F", 4: "I", 5: "Cl", 6: "Br"}),
-        ("NCI1", None),
+        ("Mutagenicity", None),
     ],
 )
 def test_visualize_graph(tmpdir, dataset_name: str, node_dict: dict):
