@@ -117,6 +117,7 @@ def train_gd(
     seed: int,
     path: str,
     loss_name: str,
+    absolute: bool,
     batch_size: int,
     n_epochs: int,
     lr: float,
@@ -134,6 +135,7 @@ def train_gd(
         seed (int): random seed
         path (str): path to the directory to save the results
         loss_name (str): name of the loss function
+        absolute (bool): whether to use absolute error
         batch_size (int): batch size
         n_epochs (int): number of epochs
         lr (float): learning rate
@@ -185,7 +187,12 @@ def train_gd(
             prediction = tree.calc_distance_between_subtree_weights(
                 left_weights, right_weights
             )
-            loss = loss_fn(prediction, y)
+            if absolute:
+                loss = loss_fn(prediction, y)
+            else:
+                loss = loss_fn(
+                    prediction / torch.clamp(y, min=1e-10), torch.ones(len(y))
+                )
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
@@ -207,7 +214,12 @@ def train_gd(
             prediction = tree.calc_distance_between_subtree_weights(
                 left_weights, right_weights
             )
-            loss = loss_fn(prediction, y)
+            if absolute:
+                loss = loss_fn(prediction, y)
+            else:
+                loss = loss_fn(
+                    prediction / torch.clamp(y, min=1e-10), torch.ones(len(y))
+                )
             eval_loss_sum += loss.item() * len(y)
         eval_loss_hist.append(eval_loss_sum / len(eval_sampler.all_pairs))
         eval_end = time.time()
@@ -239,8 +251,6 @@ def train_gd(
     plt.ylabel("Loss")
     plt.legend()
     plt.savefig(os.path.join(path, "loss.png"))
-    plt.yscale("log")
-    plt.savefig(os.path.join(path, "loss_log.png"))
     plt.close()
 
     # catter plots
@@ -350,6 +360,7 @@ def cross_validation(
     normalize: bool,
     seed: int,
     gnn: str,
+    gnn_distance: str,
     approach: str,
     path: str,
     **kwargs,
@@ -363,6 +374,7 @@ def cross_validation(
         normalize (bool): whether to normalize the distribution on WLLT
         seed (int): random seed
         gnn (str): GNN model
+        gnn_distance (str): distance metric for GNN embeddings
         approach (str): linear or gd
         path (str): path to the directory to save the results
         **kwargs: additional arguments
@@ -403,7 +415,7 @@ def cross_validation(
                 f"{dataset_name}",
                 f"{gnn}",
                 f"fold{i}",
-                "dist_1.pt",
+                f"dist_{gnn_distance[-1]}.pt",
             )
         )
         train_distances = distances[train_indices][:, train_indices]
@@ -425,6 +437,7 @@ def cross_validation(
                 seed,
                 os.path.join(path, f"fold_{i}"),
                 kwargs["loss_name"],
+                kwargs["absolute"],
                 kwargs["batch_size"],
                 kwargs["n_epochs"],
                 kwargs["lr"],
@@ -443,6 +456,7 @@ def cross_validation(
         "normalize": normalize,
         "seed": seed,
         "gnn": gnn,
+        "gnn_distance": gnn_distance,
         "tree_time": tree_end - tree_start,
     }
     if approach == "linear":
@@ -451,11 +465,16 @@ def cross_validation(
     elif approach == "gd":
         info["approach"] = "gd"
         info["loss_name"] = kwargs["loss_name"]
+        info["absolute"] = kwargs["absolute"]
         info["batch_size"] = kwargs["batch_size"]
         info["n_epochs"] = kwargs["n_epochs"]
         info["lr"] = kwargs["lr"]
         info["save_interval"] = kwargs["save_interval"]
-        info["clip_param_threshold"] = kwargs["clip_param_threshold"]
+        info["clip_param_threshold"] = (
+            float(kwargs["clip_param_threshold"])
+            if kwargs["clip_param_threshold"] is not None
+            else None
+        )
     os.makedirs(path, exist_ok=True)
     with open(os.path.join(path, "info.json"), "w") as f:
         json.dump(info, f)
@@ -464,12 +483,13 @@ def cross_validation(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--dataset_name", choices=["MUTAG", "NCI1"])
+    parser.add_argument("--dataset_name", choices=["MUTAG", "Mutagenicity"])
     parser.add_argument("--k_fold", type=int)
     parser.add_argument("--depth", type=int)
     parser.add_argument("--normalize", action="store_true")
     parser.add_argument("--seed", type=int)
     parser.add_argument("--gnn", choices=["gcn", "gin", "gat"])
+    parser.add_argument("--gnn_distance", type=str, choices=["l1", "l2"])
 
     subparsers = parser.add_subparsers(dest="approach")
     # linear
@@ -478,6 +498,7 @@ if __name__ == "__main__":
     # gradient descent
     gd_parser = subparsers.add_parser("gd")
     gd_parser.add_argument("--loss_name", type=str, choices=["l1", "l2"])
+    gd_parser.add_argument("--absolute", action="store_true")
     gd_parser.add_argument("--batch_size", type=int)
     gd_parser.add_argument("--n_epochs", type=int)
     gd_parser.add_argument("--lr", type=float)
@@ -510,6 +531,7 @@ if __name__ == "__main__":
             RESULT_DIR,
             args.dataset_name,
             args.gnn,
+            args.gnn_distance,
             f"d{args.depth}",
             f"{norm}_n={args.n_samples}_s={args.seed}",
         )
@@ -518,8 +540,9 @@ if __name__ == "__main__":
             RESULT_DIR,
             args.dataset_name,
             args.gnn,
+            args.gnn_distance,
             f"d{args.depth}",
-            f"{norm}_l={args.loss_name}_b={args.batch_size}_e={args.n_epochs}_lr={args.lr}_c={args.clip_param_threshold}_seed={args.seed}",
+            f"{norm}_l={args.loss_name}_a={args.absolute}_b={args.batch_size}_e={args.n_epochs}_lr={args.lr}_c={args.clip_param_threshold}_s={args.seed}",
         )
 
     if os.path.exists(os.path.join(kwargs["path"], "info.json")):
