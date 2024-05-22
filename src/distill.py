@@ -94,8 +94,14 @@ def distance_scatter_plot(
         preds_list.append(prediction)
     ys = torch.cat(ys_list)
     preds = torch.cat(preds_list)
-    mean = torch.mean(torch.abs(preds - ys) / ys)
-    std = torch.std(torch.abs(preds - ys) / ys)
+    abs_mean = torch.mean(torch.abs(preds - ys))
+    abs_std = torch.std(torch.abs(preds - ys))
+    abs_norm_mean = torch.mean(torch.abs(preds - ys) / torch.mean(ys))
+    abs_norm_std = torch.std(torch.abs(preds - ys) / torch.mean(ys))
+    rel_error = torch.abs(preds / ys - 1)
+    rel_error = rel_error[~torch.isnan(rel_error) & ~torch.isinf(rel_error)]
+    rel_mean = torch.mean(rel_error)
+    rel_std = torch.std(rel_error)
     corr = torch.corrcoef(torch.stack([preds, ys], dim=0))
     plt.scatter(preds, ys)
     plt.plot(
@@ -105,7 +111,17 @@ def distance_scatter_plot(
     )
     plt.xlabel("Prediction")
     plt.ylabel("Ground truth")
-    plt.title("Error: {:.3f}±{:.3f}, Corr: {:.3f}".format(mean, std, corr[0, 1].item()))
+    plt.title(
+        "Abs: {:.3f}±{:.3f}, Abs(norm):{:.3f}±{:.3f},\n Rel: {:.3f}±{:.3f} Corr: {:.3f}".format(
+            abs_mean,
+            abs_std,
+            abs_norm_mean,
+            abs_norm_std,
+            rel_mean,
+            rel_std,
+            corr[0, 1].item(),
+        )
+    )
     plt.savefig(path)
     plt.close()
 
@@ -414,6 +430,7 @@ def cross_validation(
                 "../gnn",
                 f"{dataset_name}",
                 f"{gnn}",
+                f"{depth-1}",
                 f"fold{i}",
                 f"dist_{gnn_distance[-1]}.pt",
             )
