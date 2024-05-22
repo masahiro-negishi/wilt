@@ -130,7 +130,7 @@ class WeisfeilerLemanLabelingTree:
                         parent[d].append(current_labeling[node_idx])
                     new_labeling[node_idx] = labeling_hash[d][idx]
                 current_labeling = new_labeling
-        print(cnt_nodes)
+
         # relabeling
         tuple2int: dict[tuple[int, int], int] = {}
         n_nodes = 0
