@@ -1,3 +1,5 @@
+import matplotlib.pyplot as plt  # type: ignore
+import networkx as nx  # type: ignore
 import torch
 from torch_geometric.data import Batch, Data, Dataset  # type: ignore
 
@@ -198,10 +200,10 @@ class WeisfeilerLemanLabelingTree:
                         sorted(
                             [
                                 (
-                                    current_labeling[nx],
+                                    current_labeling[nv],
                                     int(torch.argmax(graph.edge_attr[edge_idx]).item()),
                                 )
-                                for nx, edge_idx in adj_list[node_idx]
+                                for nv, edge_idx in adj_list[node_idx]
                             ]
                         )
                     ),
@@ -269,6 +271,25 @@ class WeisfeilerLemanLabelingTree:
     ########################
     # test data separation #
     ########################
+    def identify_nodes_convered_by_subset(
+        self, data: Dataset, indices: torch.Tensor
+    ) -> torch.Tensor:
+        """identify nodes covered by subset of data
+
+        Args:
+            data (Dataset): Dataset
+            indices (torch.Tensor): indices of subset
+
+        Returns:
+            torch.Tensor: nodes covered by subset
+        """
+        subset = data[indices]
+        seen = torch.zeros(self.n_nodes, dtype=torch.bool)
+        for graph in subset:
+            dist = self.calc_subtree_weights(graph)
+            seen = torch.logical_or(seen, dist > 0)
+        return seen
+
     def test_data_wwo_unseen_nodes(
         self, data: Dataset, train_indices: torch.Tensor, test_indices: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor]:
@@ -282,17 +303,12 @@ class WeisfeilerLemanLabelingTree:
         Returns:
             tuple[torch.Tensor, torch.Tensor]: indices for test data with/without unseen nodes
         """
-        train_data = data[train_indices]
-        test_data = data[test_indices]
-        train_seen = torch.zeros(self.n_nodes, dtype=torch.bool)
-        for graph in train_data:
-            train_dist = self.calc_subtree_weights(graph)
-            train_seen = torch.logical_or(train_seen, train_dist > 0)
+        train_seen = self.identify_nodes_convered_by_subset(data, train_indices)
         train_unseen = torch.logical_not(train_seen)
         test_seen_indices = []
         test_unseen_indices = []
-        for i, graph in zip(test_indices, test_data):
-            test_dist = self.calc_subtree_weights(graph)
+        for i in test_indices:
+            test_dist = self.calc_subtree_weights(data[i])
             if torch.any(torch.logical_and(test_dist > 0, train_unseen)):
                 test_unseen_indices.append(i)
             else:
@@ -329,3 +345,86 @@ class WeisfeilerLemanLabelingTree:
 
     def eval(self) -> None:
         self.parameter.requires_grad = False
+
+    #################
+    # visualization #
+    #################
+    def get_node_attr(self, node: int) -> int:
+        """get attribute of node
+
+        Args:
+            node (int): node of WLLT
+
+        Returns:
+            int: attribute of node
+        """
+        assert node >= 1
+        if node in self.label2attr:
+            return self.label2attr[node]
+        else:
+            return self.get_node_attr(self.labeling_hash_inv[node][0])
+
+    def unfolding_tree(self, node: int, path: str):
+        """Unfolding tree visualization
+
+        Args:
+            node (int): node of WLLT to unfold
+            path (str): Path to save image
+        """
+        if node == 0:
+            print("No corresponding unfolding tree for node 0")
+            return
+
+        # prepare inverse dictionary if not exists
+        if not hasattr(self, "label2attr"):
+            self.label2attr: dict[int, int] = {v: k for k, v in self.attr2label.items()}
+        if not hasattr(self, "labeling_hash_inv"):
+            self.labeling_hash_inv: dict[
+                int, tuple[int, tuple[tuple[int, int], ...]]
+            ] = {v: k for k, v in self.labeling_hash.items()}
+
+        unfolded = nx.Graph()
+        queue = [(-1, node, -1)]  # parent, now, edge_idx
+        node_cnt = 0
+        while len(queue) > 0:
+            pa, now, edge_attr = queue.pop(0)
+            if now in self.labeling_hash_inv:
+                unfolded.add_node(
+                    node_cnt,
+                    label=self.get_node_attr(now),
+                    color="tab:red" if node_cnt == 0 else "tab:blue",
+                )
+                if pa != -1:
+                    unfolded.add_edge(pa, node_cnt, label=edge_attr)
+                _, neighbors = self.labeling_hash_inv[now]
+                for nv, edge in neighbors:
+                    queue.append((node_cnt, nv, edge))
+            else:
+                unfolded.add_node(
+                    node_cnt,
+                    label=self.label2attr[now],
+                    color="tab:red" if node_cnt == 0 else "tab:blue",
+                )
+                if pa != -1:
+                    unfolded.add_edge(pa, node_cnt, label=edge_attr)
+            node_cnt += 1
+        plt.figure(figsize=(10, 10))
+        pos = nx.spring_layout(unfolded)
+        nx.draw(unfolded, pos)
+        nx.draw_networkx_nodes(
+            unfolded,
+            pos,
+            node_color=[node[1]["color"] for node in unfolded.nodes(data=True)],
+        )
+        nx.draw_networkx_labels(
+            unfolded,
+            pos,
+            labels=nx.get_node_attributes(unfolded, "label"),
+        )
+        nx.draw_networkx_edge_labels(
+            unfolded,
+            pos,
+            edge_labels=nx.get_edge_attributes(unfolded, "label"),
+        )
+        plt.savefig(path)
+        plt.close()
