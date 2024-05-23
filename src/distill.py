@@ -84,6 +84,7 @@ def distance_scatter_plot(
     tree.eval()
     ys_list = []
     preds_list = []
+    max_pair = 10000
     for left_indices, right_indices, y in sampler:
         left_weights = subtree_weights[left_indices]
         right_weights = subtree_weights[right_indices]
@@ -92,6 +93,8 @@ def distance_scatter_plot(
         )
         ys_list.append(y)
         preds_list.append(prediction)
+        if len(ys_list) * len(ys_list[0]) > max_pair:
+            break
     ys = torch.cat(ys_list)
     preds = torch.cat(preds_list)
     abs_mean = torch.mean(torch.abs(preds - ys))
@@ -197,7 +200,7 @@ def train_gd(
         tree.train()
         train_start = time.time()
         train_loss_sum = 0
-        for left_indices, right_indices, y in train_sampler:
+        for i, (left_indices, right_indices, y) in enumerate(train_sampler):
             left_weights = train_subtree_weights[left_indices]
             right_weights = train_subtree_weights[right_indices]
             prediction = tree.calc_distance_between_subtree_weights(
@@ -217,6 +220,8 @@ def train_gd(
                     tree.parameter, min=clip_param_threshold
                 )
             train_loss_sum += loss.item() * len(y)
+            if (i + 1) % 1000 == 0:
+                print(f"Epoch {epoch+1}, Train batch {i + 1}/{len(train_sampler)}")
         train_loss_hist.append(train_loss_sum / len(train_sampler.all_pairs))
         train_end = time.time()
         train_epoch_time += train_end - train_start
@@ -224,7 +229,7 @@ def train_gd(
         tree.eval()
         eval_start = time.time()
         eval_loss_sum = 0
-        for left_indices, right_indices, y in eval_sampler:
+        for i, (left_indices, right_indices, y) in enumerate(eval_sampler):
             left_weights = eval_subtree_weights[left_indices]
             right_weights = eval_subtree_weights[right_indices]
             prediction = tree.calc_distance_between_subtree_weights(
@@ -237,11 +242,13 @@ def train_gd(
                     prediction / torch.clamp(y, min=1e-10), torch.ones(len(y))
                 )
             eval_loss_sum += loss.item() * len(y)
+            if (i + 1) % 1000 == 0:
+                print(f"Epoch {epoch+1}, Eval batch {i + 1}/{len(eval_sampler)}")
         eval_loss_hist.append(eval_loss_sum / len(eval_sampler.all_pairs))
         eval_end = time.time()
         eval_epoch_time += eval_end - eval_start
 
-        if (epoch + 1) % 10 == 0:
+        if (epoch + 1) % 1 == 0:
             print(
                 f"Epoch {epoch + 1}/{n_epochs}, Train loss: {train_loss_hist[-1]}, Eval loss: {eval_loss_hist[-1]}"
             )
