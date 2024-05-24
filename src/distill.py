@@ -72,7 +72,7 @@ def distance_scatter_plot(
     sampler: PairSampler,
     subtree_weights: torch.Tensor,
     path: str,
-) -> None:
+) -> tuple[float, ...]:
     """scatter plot of (approximated distance, ground truth distance)
 
     Args:
@@ -127,6 +127,15 @@ def distance_scatter_plot(
     )
     plt.savefig(path)
     plt.close()
+    return (
+        float(abs_mean.item()),
+        float(abs_std.item()),
+        float(abs_norm_mean.item()),
+        float(abs_norm_std.item()),
+        float(rel_mean.item()),
+        float(rel_std.item()),
+        float(corr[0, 1].item()),
+    )
 
 
 def train_gd(
@@ -257,16 +266,6 @@ def train_gd(
     train_epoch_time /= n_epochs
     eval_epoch_time /= n_epochs
 
-    # save the training information
-    info = {
-        "train_epoch_time": train_epoch_time,
-        "eval_epoch_time": eval_epoch_time,
-        "train_loss_history": train_loss_hist,
-        "eval_loss_history": eval_loss_hist,
-    }
-    with open(os.path.join(path, "rslt.json"), "w") as f:
-        json.dump(info, f)
-
     # save the loss plot
     plt.plot(train_loss_hist, label="Train")
     plt.plot(eval_loss_hist, label="Eval")
@@ -277,15 +276,55 @@ def train_gd(
     plt.close()
 
     # catter plots
-    distance_scatter_plot(
+    (
+        train_abs_mean,
+        train_abs_std,
+        train_abs_norm_mean,
+        train_abs_norm_std,
+        train_rel_mean,
+        train_rel_std,
+        train_corr,
+    ) = distance_scatter_plot(
         tree,
         train_sampler,
         train_subtree_weights,
         os.path.join(path, "scatter_train.png"),
     )
-    distance_scatter_plot(
+    (
+        eval_abs_mean,
+        eval_abs_std,
+        eval_abs_norm_mean,
+        eval_abs_norm_std,
+        eval_rel_mean,
+        eval_rel_std,
+        eval_corr,
+    ) = distance_scatter_plot(
         tree, eval_sampler, eval_subtree_weights, os.path.join(path, "scatter_eval.png")
     )
+
+    # save the training information
+    info = {
+        "train_epoch_time": train_epoch_time,
+        "eval_epoch_time": eval_epoch_time,
+        "train_loss_history": train_loss_hist,
+        "eval_loss_history": eval_loss_hist,
+        "train_abs_mean": train_abs_mean,
+        "train_abs_std": train_abs_std,
+        "train_abs_norm_mean": train_abs_norm_mean,
+        "train_abs_norm_std": train_abs_norm_std,
+        "train_rel_mean": train_rel_mean,
+        "train_rel_std": train_rel_std,
+        "train_corr": train_corr,
+        "eval_abs_mean": eval_abs_mean,
+        "eval_abs_std": eval_abs_std,
+        "eval_abs_norm_mean": eval_abs_norm_mean,
+        "eval_abs_norm_std": eval_abs_norm_std,
+        "eval_rel_mean": eval_rel_mean,
+        "eval_rel_std": eval_rel_std,
+        "eval_corr": eval_corr,
+    }
+    with open(os.path.join(path, "rslt.json"), "w") as f:
+        json.dump(info, f)
 
     # save the model
     torch.save(tree.parameter, os.path.join(path, "model_final.pt"))
