@@ -1,3 +1,5 @@
+import os
+
 import matplotlib.pyplot as plt  # type: ignore
 import networkx as nx  # type: ignore
 import torch
@@ -364,7 +366,16 @@ class WeisfeilerLemanLabelingTree:
         else:
             return self.get_node_attr(self.labeling_hash_inv[node][0])
 
-    def unfolding_tree(self, node: int, path: str):
+    def _prepare_inverse_dict(self) -> None:
+        """prepare inverse dictionary if not exists"""
+        if not hasattr(self, "label2attr"):
+            self.label2attr: dict[int, int] = {v: k for k, v in self.attr2label.items()}
+        if not hasattr(self, "labeling_hash_inv"):
+            self.labeling_hash_inv: dict[
+                int, tuple[int, tuple[tuple[int, int], ...]]
+            ] = {v: k for k, v in self.labeling_hash.items()}
+
+    def unfolding_tree(self, node: int, path: str) -> None:
         """Unfolding tree visualization
 
         Args:
@@ -375,13 +386,7 @@ class WeisfeilerLemanLabelingTree:
             print("No corresponding unfolding tree for node 0")
             return
 
-        # prepare inverse dictionary if not exists
-        if not hasattr(self, "label2attr"):
-            self.label2attr: dict[int, int] = {v: k for k, v in self.attr2label.items()}
-        if not hasattr(self, "labeling_hash_inv"):
-            self.labeling_hash_inv: dict[
-                int, tuple[int, tuple[tuple[int, int], ...]]
-            ] = {v: k for k, v in self.labeling_hash.items()}
+        self._prepare_inverse_dict()
 
         unfolded = nx.Graph()
         queue = [(-1, node, -1)]  # parent, now, edge_idx
@@ -428,3 +433,127 @@ class WeisfeilerLemanLabelingTree:
         )
         plt.savefig(path)
         plt.close()
+
+    def color_unfolding_tree_in_graph(
+        self, node_wllt: int, graph: Data, path: str
+    ) -> None:
+        """Color unfolding tree in graph
+
+        Args:
+            node_wllt (int): node of WLLT to unfold
+            graph (Data): graph
+            path (str): Path to the directory to save images
+        """
+        if node_wllt == 0:
+            print("No corresponding unfolding tree for node 0")
+            return
+
+        self._prepare_inverse_dict()
+
+        # identify root node
+        current_labeling: list[int] = [-1 for _ in range(graph.num_nodes)]
+        root_candidate: list[bool] = [False for _ in range(graph.num_nodes)]
+        root_depth = -1
+        # initial labeling
+        for node_idx, node_attr in enumerate(torch.argmax(graph.x, dim=1)):
+            current_labeling[node_idx] = self.attr2label[node_attr.item()]
+            if self.attr2label[node_attr.item()] == node_wllt:
+                root_candidate[node_idx] = True
+                root_depth = 1
+        # adjancy_list
+        adj_list: list[list[tuple[int, int]]] = self._adjancy_list(graph)
+        # iterative labeling
+        for d in range(2, self.depth + 1):
+            new_labeling: list[int] = [-1 for _ in range(graph.num_nodes)]
+            for node_idx in range(graph.num_nodes):
+                # TODO: linear time sort
+                idx: tuple[int, tuple[tuple[int, int], ...]] = (
+                    current_labeling[node_idx],
+                    tuple(
+                        sorted(
+                            [
+                                (
+                                    current_labeling[nv],
+                                    int(torch.argmax(graph.edge_attr[edge_idx]).item()),
+                                )
+                                for nv, edge_idx in adj_list[node_idx]
+                            ]
+                        )
+                    ),
+                )
+                new_labeling[node_idx] = self.labeling_hash[idx]
+                if self.labeling_hash[idx] == node_wllt:
+                    root_candidate[node_idx] = True
+                    root_depth = d
+            current_labeling = new_labeling
+        if root_depth == -1:
+            # no subgraph corresponding to node_wllt
+            return
+
+        for root_idx in range(graph.num_nodes):
+            if not root_candidate[root_idx]:
+                continue
+            # identify nodes that are in d-hop neighborhood of root node
+            d_hop_neighborhood: list[bool] = [False for _ in range(graph.num_nodes)]
+            d_hop_neighborhood[root_idx] = True
+            current_neighbors: list[int] = [root_idx]
+            for _ in range(root_depth - 1):
+                next_neighbors: list[int] = []
+                for v in current_neighbors:
+                    for nv, _ in adj_list[v]:
+                        if not d_hop_neighborhood[nv]:
+                            d_hop_neighborhood[nv] = True
+                            next_neighbors.append(nv)
+                current_neighbors = next_neighbors
+            # color the nodes and edges
+            colored_graph = nx.Graph()
+            for node_idx, node_attr in enumerate(torch.argmax(graph.x, dim=1)):
+                colored_graph.add_node(
+                    node_idx,
+                    label=node_attr.item(),
+                    color="tab:red" if d_hop_neighborhood[node_idx] else "tab:blue",
+                )
+            for (u, v), edge_attr in zip(
+                graph.edge_index.T, torch.argmax(graph.edge_attr, dim=1)
+            ):
+                colored_graph.add_edge(
+                    u.item(),
+                    v.item(),
+                    label=edge_attr.item(),
+                    color=(
+                        "tab:red"
+                        if d_hop_neighborhood[u.item()] and d_hop_neighborhood[v.item()]
+                        else "tab:blue"
+                    ),
+                )
+
+            # save the image
+            plt.figure(figsize=(10, 10))
+            pos = nx.spring_layout(colored_graph)
+            nx.draw(colored_graph, pos)
+            nx.draw_networkx_nodes(
+                colored_graph,
+                pos,
+                node_color=[
+                    node[1]["color"] for node in colored_graph.nodes(data=True)
+                ],
+            )
+            nx.draw_networkx_edges(
+                colored_graph,
+                pos,
+                edge_color=[
+                    edge[2]["color"] for edge in colored_graph.edges(data=True)
+                ],
+            )
+            nx.draw_networkx_labels(
+                colored_graph,
+                pos,
+                labels=nx.get_node_attributes(colored_graph, "label"),
+            )
+            nx.draw_networkx_edge_labels(
+                colored_graph,
+                pos,
+                edge_labels=nx.get_edge_attributes(colored_graph, "label"),
+            )
+            plt.savefig(os.path.join(path, f"{root_idx}.png"))
+            plt.close()
