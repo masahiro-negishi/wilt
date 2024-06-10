@@ -141,6 +141,7 @@ def distance_scatter_plot(
 def train_gd(
     train_data: Dataset,
     eval_data: Dataset,
+    embedding: str,
     tree: WeisfeilerLemanLabelingTree,
     seed: int,
     path: str,
@@ -159,6 +160,7 @@ def train_gd(
     Args:
         train_data (Dataset): training dataset
         eval_data (Dataset): validation dataset
+        embedding (str): embedding method
         tree (WeisfeilerLemanLabelingTree): WLLT
         seed (int): random seed
         path (str): path to the directory to save the results
@@ -198,12 +200,31 @@ def train_gd(
     eval_loss_hist = []
     train_epoch_time: float = 0
     eval_epoch_time: float = 0
-    train_subtree_weights = torch.stack(
-        [tree.calc_subtree_weights(g) for g in train_data], dim=0
-    )
-    eval_subtree_weights = torch.stack(
-        [tree.calc_subtree_weights(g) for g in eval_data], dim=0
-    )
+    if embedding == "tree":
+        train_subtree_weights = torch.stack(
+            [tree.calc_subtree_weights(g) for g in train_data], dim=0
+        )
+        eval_subtree_weights = torch.stack(
+            [tree.calc_subtree_weights(g) for g in eval_data], dim=0
+        )
+    elif embedding == "uniform":
+        train_subtree_weights = torch.rand(len(train_data), len(tree.parameter))
+        eval_subtree_weights = torch.rand(len(eval_data), len(tree.parameter))
+    else:
+        train_subtree_weights = torch.stack(
+            [
+                tree.calc_subtree_weights(g)[torch.randperm(len(tree.parameter))]
+                for g in train_data
+            ],
+            dim=0,
+        )
+        eval_subtree_weights = torch.stack(
+            [
+                tree.calc_subtree_weights(g)[torch.randperm(len(tree.parameter))]
+                for g in eval_data
+            ],
+            dim=0,
+        )
     for epoch in range(n_epochs):
         # training
         tree.train()
@@ -329,6 +350,8 @@ def train_gd(
     # save the model
     torch.save(tree.parameter, os.path.join(path, "model_final.pt"))
 
+    return train_corr, eval_corr
+
 
 def train_linear(
     train_all_data: Dataset,
@@ -348,6 +371,7 @@ def train_linear(
         n_samples (Optional[int]): number of samples to use for training
         train_distances (torch.Tensor): distance matrix calculated by GNN
     """
+    raise NotImplementedError
     # fix seed
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -417,6 +441,7 @@ def train_linear(
 
 def cross_validation(
     dataset_name: str,
+    embedding: str,
     k_fold: int,
     depth: int,
     normalize: bool,
@@ -431,6 +456,7 @@ def cross_validation(
 
     Args:
         dataset_name (str): dataset name
+        embedding (str): embedding method
         k_fold (int): number of splits
         depth (int): number of layers in the WLLT
         normalize (bool): whether to normalize the distribution on WLLT
@@ -455,6 +481,8 @@ def cross_validation(
     indices = np.random.RandomState(seed=seed).permutation(n_samples)
 
     # cross validation
+    train_corrs = [-1 for _ in range(k_fold)]
+    eval_corrs = [-1 for _ in range(k_fold)]
     for i in range(k_fold):
         if os.path.exists(os.path.join(path, f"fold_{i}", "rslt.json")):
             print(f"{os.path.join(path, f'fold_{i}')} already exists")
@@ -493,9 +521,10 @@ def cross_validation(
                 train_distances,
             )
         elif approach == "gd":
-            train_gd(
+            train_corrs[i], eval_corrs[i] = train_gd(
                 train_data,
                 eval_data,
+                embedding,
                 tree,
                 seed,
                 os.path.join(path, f"fold_{i}"),
@@ -514,6 +543,7 @@ def cross_validation(
     # save the training information
     info = {
         "dataset_name": dataset_name,
+        "embedding": embedding,
         "k_fold": k_fold,
         "depth": depth,
         "normalize": normalize,
@@ -538,6 +568,10 @@ def cross_validation(
             if kwargs["clip_param_threshold"] is not None
             else None
         )
+    info["train_corr_mean"] = np.mean(train_corrs)
+    info["train_corr_std"] = np.std(train_corrs)
+    info["eval_corr_mean"] = np.mean(eval_corrs)
+    info["eval_corr_std"] = np.std(eval_corrs)
     os.makedirs(path, exist_ok=True)
     with open(os.path.join(path, "info.json"), "w") as f:
         json.dump(info, f)
@@ -547,6 +581,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--dataset_name", choices=["MUTAG", "Mutagenicity"])
+    parser.add_argument(
+        "--embedding", choices=["tree", "uniform", "shuffle"], default="tree"
+    )
     parser.add_argument("--k_fold", type=int)
     parser.add_argument("--depth", type=int)
     parser.add_argument("--normalize", action="store_true")
@@ -605,7 +642,7 @@ if __name__ == "__main__":
             args.gnn,
             args.gnn_distance,
             f"d{args.depth}",
-            f"{norm}_l={args.loss_name}_a={args.absolute}_b={args.batch_size}_e={args.n_epochs}_lr={args.lr}_c={args.clip_param_threshold}_s={args.seed}",
+            f"{norm}_l={args.loss_name}_a={args.absolute}_b={args.batch_size}_e={args.n_epochs}_lr={args.lr}_c={args.clip_param_threshold}_s={args.seed}_e={args.embedding}",
         )
 
     if os.path.exists(os.path.join(kwargs["path"], "info.json")):
