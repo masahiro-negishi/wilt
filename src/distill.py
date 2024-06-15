@@ -210,6 +210,23 @@ def train_gd(
     elif embedding == "uniform":
         train_subtree_weights = torch.rand(len(train_data), len(tree.parameter))
         eval_subtree_weights = torch.rand(len(eval_data), len(tree.parameter))
+    elif embedding == "sparse-uniform":
+        train_nonzero_prob = torch.count_nonzero(
+            torch.stack([tree.calc_subtree_weights(g) for g in train_data], dim=0)
+        ) / (len(train_data) * len(tree.parameter))
+        eval_nonzero_prob = torch.count_nonzero(
+            torch.stack([tree.calc_subtree_weights(g) for g in eval_data], dim=0)
+        ) / (len(eval_data) * len(tree.parameter))
+        train_subtree_weights = torch.where(
+            torch.rand(len(train_data), len(tree.parameter)) < train_nonzero_prob,
+            torch.rand(len(train_data), len(tree.parameter)),
+            torch.zeros(len(train_data), len(tree.parameter)),
+        )
+        eval_subtree_weights = torch.where(
+            torch.rand(len(eval_data), len(tree.parameter)) < eval_nonzero_prob,
+            torch.rand(len(eval_data), len(tree.parameter)),
+            torch.zeros(len(eval_data), len(tree.parameter)),
+        )
     else:
         train_subtree_weights = torch.stack(
             [
@@ -350,7 +367,7 @@ def train_gd(
     # save the model
     torch.save(tree.parameter, os.path.join(path, "model_final.pt"))
 
-    return train_corr, eval_corr
+    return train_abs_norm_mean, eval_abs_norm_mean
 
 
 def train_linear(
@@ -481,8 +498,8 @@ def cross_validation(
     indices = np.random.RandomState(seed=seed).permutation(n_samples)
 
     # cross validation
-    train_corrs = [-1 for _ in range(k_fold)]
-    eval_corrs = [-1 for _ in range(k_fold)]
+    train_abs_norm_means = [-1 for _ in range(k_fold)]
+    eval_abes_norm_means = [-1 for _ in range(k_fold)]
     for i in range(k_fold):
         if os.path.exists(os.path.join(path, f"fold_{i}", "rslt.json")):
             print(f"{os.path.join(path, f'fold_{i}')} already exists")
@@ -521,7 +538,7 @@ def cross_validation(
                 train_distances,
             )
         elif approach == "gd":
-            train_corrs[i], eval_corrs[i] = train_gd(
+            train_abs_norm_means[i], eval_abes_norm_means[i] = train_gd(
                 train_data,
                 eval_data,
                 embedding,
@@ -568,10 +585,10 @@ def cross_validation(
             if kwargs["clip_param_threshold"] is not None
             else None
         )
-    info["train_corr_mean"] = np.mean(train_corrs)
-    info["train_corr_std"] = np.std(train_corrs)
-    info["eval_corr_mean"] = np.mean(eval_corrs)
-    info["eval_corr_std"] = np.std(eval_corrs)
+    info["train_abs_norm_mean"] = np.mean(train_abs_norm_means)
+    info["train_abs_norm_std"] = np.std(train_abs_norm_means)
+    info["eval_abs_norm_mean"] = np.mean(eval_abes_norm_means)
+    info["eval_abs_norm_std"] = np.std(eval_abes_norm_means)
     os.makedirs(path, exist_ok=True)
     with open(os.path.join(path, "info.json"), "w") as f:
         json.dump(info, f)
@@ -582,7 +599,9 @@ if __name__ == "__main__":
 
     parser.add_argument("--dataset_name", choices=["MUTAG", "Mutagenicity"])
     parser.add_argument(
-        "--embedding", choices=["tree", "uniform", "shuffle"], default="tree"
+        "--embedding",
+        choices=["tree", "uniform", "sparse-uniform", "shuffle"],
+        default="tree",
     )
     parser.add_argument("--k_fold", type=int)
     parser.add_argument("--depth", type=int)
