@@ -15,7 +15,7 @@ from torch.utils.data import BatchSampler
 from torch_geometric.data import Dataset  # type: ignore
 from torch_geometric.datasets import TUDataset  # type: ignore
 
-from path import DATA_DIR, RESULT_DIR  # type: ignore
+from path import DATA_DIR, GNN_DIR, RESULT_DIR  # type: ignore
 from tree import WeisfeilerLemanLabelingTree
 
 
@@ -517,13 +517,12 @@ def cross_validation(
         eval_data = data[eval_indices]
         distances = torch.load(
             os.path.join(
-                RESULT_DIR,
-                "../gnn",
+                GNN_DIR,
                 f"{dataset_name}",
                 f"{gnn}",
                 f"{depth-1}",
                 f"fold{i}",
-                f"dist_{gnn_distance[-1]}.pt",
+                f"dist_{gnn_distance}.pt",
             )
         )
         train_distances = distances[train_indices][:, train_indices]
