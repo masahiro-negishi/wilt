@@ -5,6 +5,7 @@ rslt/
 anlys/
 expt/
 gnn/
+dis_mx/
 
 __pycache__/
 .mypy_cache/
