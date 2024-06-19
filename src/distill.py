@@ -370,92 +370,6 @@ def train_gd(
     return train_abs_norm_mean, eval_abs_norm_mean
 
 
-def train_linear(
-    train_all_data: Dataset,
-    tree: WeisfeilerLemanLabelingTree,
-    seed: int,
-    path: str,
-    n_samples: Optional[int],
-    train_distances: torch.Tensor,
-):
-    """train the model with non-negative least squares
-
-    Args:
-        train_all_data (Dataset): training dataset
-        tree (WeisfeilerLemanLabelingTree): WLLT
-        seed (int): random seed
-        path (str): path to the directory to save the results
-        n_samples (Optional[int]): number of samples to use for training
-        train_distances (torch.Tensor): distance matrix calculated by GNN
-    """
-    raise NotImplementedError
-    # fix seed
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    random.seed(seed)
-    torch.backends.cudnn.benchmark = False
-    torch.backends.cudnn.deterministic = True
-
-    # use only some of the training data
-    all_pairs = []
-    for i in range(len(train_all_data)):
-        for j in range(i + 1, len(train_all_data)):
-            all_pairs.append((i, j))
-    if n_samples is None:
-        pairs = all_pairs
-    else:
-        pairs = random.sample(all_pairs, n_samples)
-
-    # prepare X and y
-    left_indices = torch.tensor([pair[0] for pair in pairs])
-    right_indices = torch.tensor([pair[1] for pair in pairs])
-    train_subtree_weights = torch.stack(
-        [tree.calc_subtree_weights(g) for g in train_all_data], dim=0
-    )
-    X = torch.abs(
-        train_subtree_weights[left_indices] - train_subtree_weights[right_indices]
-    )
-    zero_column = torch.sum(X, dim=0) == 0
-    X = X[:, ~zero_column]
-    y = train_distances[left_indices, right_indices]
-
-    # train the model
-    converged = False
-    maxiter = -1
-    for maxiter_cand in [100, 1000, 10000, 100000]:
-        maxiter = maxiter_cand
-        try:
-            train_start = time.time()
-            weight, _ = nnls(X, y, maxiter=maxiter)
-            train_end = time.time()
-            train_time = train_end - train_start
-            converged = True
-            break
-        except:
-            train_end = time.time()
-            train_time = train_end - train_start
-            continue
-
-    # display prediction
-    os.makedirs(path, exist_ok=True)
-    if converged:
-        predicted = X @ weight
-        print(torch.abs(predicted - y).mean(), torch.abs(predicted - y).std())
-
-    # save the training information
-    info = {
-        "train_time": train_time,
-        "converged": converged,
-        "maxiter": maxiter,
-    }
-    with open(os.path.join(path, "rslt.json"), "w") as f:
-        json.dump(info, f)
-
-    # save the model
-    if converged:
-        torch.save(torch.from_numpy(weight), os.path.join(path, "model_final.pt"))
-
-
 def cross_validation(
     dataset_name: str,
     embedding: str,
@@ -465,7 +379,6 @@ def cross_validation(
     seed: int,
     gnn: str,
     gnn_distance: str,
-    approach: str,
     path: str,
     **kwargs,
 ):
@@ -480,19 +393,15 @@ def cross_validation(
         seed (int): random seed
         gnn (str): GNN model
         gnn_distance (str): distance metric for GNN embeddings
-        approach (str): linear or gd
         path (str): path to the directory to save the results
         **kwargs: additional arguments
     """
 
     data = TUDataset(root=os.path.join(DATA_DIR, "TUDataset"), name=dataset_name)
     tree_start = time.time()
-    if approach == "gd":
-        tree = WeisfeilerLemanLabelingTree(
-            data, depth, kwargs["clip_param_threshold"] is None, normalize
-        )
-    elif approach == "linear":
-        tree = WeisfeilerLemanLabelingTree(data, depth, False, normalize)
+    tree = WeisfeilerLemanLabelingTree(
+        data, depth, kwargs["clip_param_threshold"] is None, normalize
+    )
     tree_end = time.time()
     n_samples = len(data)
     indices = np.random.RandomState(seed=seed).permutation(n_samples)
@@ -527,33 +436,23 @@ def cross_validation(
         )
         train_distances = distances[train_indices][:, train_indices]
         eval_distances = distances[eval_indices][:, eval_indices]
-        if approach == "linear":
-            train_linear(
-                train_data,
-                tree,
-                seed,
-                os.path.join(path, f"fold_{i}"),
-                kwargs["n_samples"],
-                train_distances,
-            )
-        elif approach == "gd":
-            train_abs_norm_means[i], eval_abes_norm_means[i] = train_gd(
-                train_data,
-                eval_data,
-                embedding,
-                tree,
-                seed,
-                os.path.join(path, f"fold_{i}"),
-                kwargs["loss_name"],
-                kwargs["absolute"],
-                kwargs["batch_size"],
-                kwargs["n_epochs"],
-                kwargs["lr"],
-                kwargs["save_interval"],
-                kwargs["clip_param_threshold"],
-                train_distances,
-                eval_distances,
-            )
+        train_abs_norm_means[i], eval_abes_norm_means[i] = train_gd(
+            train_data,
+            eval_data,
+            embedding,
+            tree,
+            seed,
+            os.path.join(path, f"fold_{i}"),
+            kwargs["loss_name"],
+            kwargs["absolute"],
+            kwargs["batch_size"],
+            kwargs["n_epochs"],
+            kwargs["lr"],
+            kwargs["save_interval"],
+            kwargs["clip_param_threshold"],
+            train_distances,
+            eval_distances,
+        )
         tree.reset_parameter()
 
     # save the training information
@@ -567,27 +466,22 @@ def cross_validation(
         "gnn": gnn,
         "gnn_distance": gnn_distance,
         "tree_time": tree_end - tree_start,
-    }
-    if approach == "linear":
-        info["approach"] = "linear"
-        info["n_samples"] = kwargs["n_samples"]
-    elif approach == "gd":
-        info["approach"] = "gd"
-        info["loss_name"] = kwargs["loss_name"]
-        info["absolute"] = kwargs["absolute"]
-        info["batch_size"] = kwargs["batch_size"]
-        info["n_epochs"] = kwargs["n_epochs"]
-        info["lr"] = kwargs["lr"]
-        info["save_interval"] = kwargs["save_interval"]
-        info["clip_param_threshold"] = (
+        "loss_name": kwargs["loss_name"],
+        "absolute": kwargs["absolute"],
+        "batch_size": kwargs["batch_size"],
+        "n_epochs": kwargs["n_epochs"],
+        "lr": kwargs["lr"],
+        "save_interval": kwargs["save_interval"],
+        "clip_param_threshold": (
             float(kwargs["clip_param_threshold"])
             if kwargs["clip_param_threshold"] is not None
             else None
-        )
-    info["train_abs_norm_mean"] = np.mean(train_abs_norm_means)
-    info["train_abs_norm_std"] = np.std(train_abs_norm_means)
-    info["eval_abs_norm_mean"] = np.mean(eval_abes_norm_means)
-    info["eval_abs_norm_std"] = np.std(eval_abes_norm_means)
+        ),
+        "train_abs_norm_mean": np.mean(train_abs_norm_means),
+        "train_abs_norm_std": np.std(train_abs_norm_means),
+        "eval_abs_norm_mean": np.mean(eval_abes_norm_means),
+        "eval_abs_norm_std": np.std(eval_abes_norm_means),
+    }
     os.makedirs(path, exist_ok=True)
     with open(os.path.join(path, "info.json"), "w") as f:
         json.dump(info, f)
@@ -608,26 +502,19 @@ if __name__ == "__main__":
     parser.add_argument("--seed", type=int)
     parser.add_argument("--gnn", choices=["gcn", "gin", "gat"])
     parser.add_argument("--gnn_distance", type=str, choices=["l1", "l2"])
-
-    subparsers = parser.add_subparsers(dest="approach")
-    # linear
-    linear_parser = subparsers.add_parser("linear")
-    linear_parser.add_argument("--n_samples", type=int, required=False, default=None)
-    # gradient descent
-    gd_parser = subparsers.add_parser("gd")
-    gd_parser.add_argument("--loss_name", type=str, choices=["l1", "l2"])
-    gd_parser.add_argument("--absolute", action="store_true")
-    gd_parser.add_argument("--batch_size", type=int)
-    gd_parser.add_argument("--n_epochs", type=int)
-    gd_parser.add_argument("--lr", type=float)
-    gd_parser.add_argument("--save_interval", type=int)
-    gd_parser.add_argument(
+    parser.add_argument("--loss_name", type=str, choices=["l1", "l2"])
+    parser.add_argument("--absolute", action="store_true")
+    parser.add_argument("--batch_size", type=int)
+    parser.add_argument("--n_epochs", type=int)
+    parser.add_argument("--lr", type=float)
+    parser.add_argument("--save_interval", type=int)
+    parser.add_argument(
         "--clip_param_threshold", type=str, required=False, default=None
     )
 
     args = parser.parse_args()
 
-    if args.approach == "gd" and args.clip_param_threshold is not None:
+    if args.clip_param_threshold is not None:
         if args.clip_param_threshold.lower() == "none":
             args.clip_param_threshold = None
         else:
@@ -644,24 +531,14 @@ if __name__ == "__main__":
     kwargs = args.__dict__
     norm = "norm" if args.normalize else "unnorm"
 
-    if args.approach == "linear":
-        kwargs["path"] = os.path.join(
-            RESULT_DIR,
-            args.dataset_name,
-            args.gnn,
-            args.gnn_distance,
-            f"d{args.depth}",
-            f"{norm}_n={args.n_samples}_s={args.seed}",
-        )
-    elif args.approach == "gd":
-        kwargs["path"] = os.path.join(
-            RESULT_DIR,
-            args.dataset_name,
-            args.gnn,
-            args.gnn_distance,
-            f"d{args.depth}",
-            f"{norm}_l={args.loss_name}_a={args.absolute}_b={args.batch_size}_e={args.n_epochs}_lr={args.lr}_c={args.clip_param_threshold}_s={args.seed}_e={args.embedding}",
-        )
+    kwargs["path"] = os.path.join(
+        RESULT_DIR,
+        args.dataset_name,
+        args.gnn,
+        args.gnn_distance,
+        f"d{args.depth}",
+        f"{norm}_l={args.loss_name}_a={args.absolute}_b={args.batch_size}_e={args.n_epochs}_lr={args.lr}_c={args.clip_param_threshold}_s={args.seed}_e={args.embedding}",
+    )
 
     if os.path.exists(os.path.join(kwargs["path"], "info.json")):
         print(f"{kwargs['path']} already exists")
