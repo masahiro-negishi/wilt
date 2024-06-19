@@ -24,6 +24,7 @@ def calc_distance_matrix_WLLT_WWLGK(dataset: Dataset, metric, **kwargs) -> torch
         kwargs["depth"],
         False,
         kwargs["normalize"] if metric == "WLLT" else True,
+        False if metric == "WWLGK" else None,
     )
     embeddings = torch.stack([tree.calc_subtree_weights(g) for g in dataset], dim=0)
     tree.eval()
@@ -350,7 +351,7 @@ if __name__ == "__main__":
         elif args.metric == "WWLGK":
             path = os.path.join(
                 DIS_MX_DIR,
-                args.ataset_name,
+                args.dataset_name,
                 f"{args.metric}_d={args.depth}.pt",
             )
         elif args.metric == "GED":
