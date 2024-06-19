@@ -17,6 +17,8 @@ from visualize import visualize_graph, visualize_WLLT  # type: ignore
         ("MUTAG", 3, False),
         ("Mutagenicity", 1, True),
         ("Mutagenicity", 2, False),
+        ("NCI1", 1, True),
+        ("NCI1", 2, False),
     ],
 )
 def test_visualize_WLLT(tmpdir, dataset_name: str, depth: int, withweight: bool):
@@ -32,6 +34,7 @@ def test_visualize_WLLT(tmpdir, dataset_name: str, depth: int, withweight: bool)
         ("MUTAG", None),
         ("MUTAG", {0: "C", 1: "N", 2: "O", 3: "F", 4: "I", 5: "Cl", 6: "Br"}),
         ("Mutagenicity", None),
+        ("NCI1", None),
     ],
 )
 def test_visualize_graph(tmpdir, dataset_name: str, node_dict: dict):

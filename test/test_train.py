@@ -27,6 +27,8 @@ from tree import WeisfeilerLemanLabelingTree  # type: ignore
         ("MUTAG", 20),
         ("Mutagenicity", 10),
         ("Mutagenicity", 20),
+        ("NCI1", 10),
+        ("NCI1", 20),
     ],
 )
 def test_TripletSampler(dataset_name: str, batch_size: int):
@@ -56,6 +58,8 @@ def test_TripletSampler(dataset_name: str, batch_size: int):
         ("MUTAG", 20, 10),
         ("Mutagenicity", 10, 5),
         ("Mutagenicity", 20, 10),
+        ("NCI1", 10, 5),
+        ("NCI1", 20, 10),
     ],
 )
 def test_NPlusTwoSampler(dataset_name: str, batch_size: int, n_negative: int):
@@ -92,6 +96,11 @@ def test_NPlusTwoSampler(dataset_name: str, batch_size: int, n_negative: int):
         ("Mutagenicity", 2, True, "infonce", 256, 2, 0.01, 5, 0, 1e-3, 1),
         ("Mutagenicity", 2, True, "allpairnce", 256, 2, 0.01, 5, 0, 1e-3, 1),
         ("Mutagenicity", 2, True, "knnnce", 256, 2, 0.01, 5, 0, 1e-3, 1),
+        ("NCI1", 2, True, "triplet", 128, 2, 0.01, 5, 0, 1e-3, 1),
+        ("NCI1", 3, False, "nce", 256, 1, 0.001, 10, 42, None, 1),
+        ("NCI1", 2, True, "infonce", 256, 2, 0.01, 5, 0, 1e-3, 1),
+        ("NCI1", 2, True, "allpairnce", 256, 2, 0.01, 5, 0, 1e-3, 1),
+        ("NCI1", 2, True, "knnnce", 256, 2, 0.01, 5, 0, 1e-3, 1),
     ],
 )
 def test_train(
@@ -216,6 +225,7 @@ def test_train(
         ("MUTAG", 2, True, 0, 0, 10, 10),
         ("MUTAG", 3, False, 42, 1, 100, None),
         ("Mutagenicity", 2, True, 0, 0, 10, 50),
+        ("NCI1", 2, False, 42, 1, 10, 50),
     ],
 )
 def test_train_linear(
@@ -261,6 +271,11 @@ def test_train_linear(
         ("Mutagenicity", 5, 2, True, "infonce", 256, 2, 0.01, 5, 0, 1e-3, 1),
         ("Mutagenicity", 5, 2, True, "allpairnce", 256, 2, 0.01, 5, 0, 1e-3, 1),
         ("Mutagenicity", 5, 2, True, "knnnce", 256, 2, 0.01, 5, 0, 1e-3, 1),
+        ("NCI1", 5, 2, True, "triplet", 128, 2, 0.01, 5, 0, 1e-3, 1),
+        ("NCI1", 10, 3, False, "nce", 256, 1, 0.001, 10, 42, None, 1),
+        ("NCI1", 5, 2, True, "infonce", 256, 2, 0.01, 5, 0, 1e-3, 1),
+        ("NCI1", 5, 2, True, "allpairnce", 256, 2, 0.01, 5, 0, 1e-3, 1),
+        ("NCI1", 5, 2, True, "knnnce", 256, 2, 0.01, 5, 0, 1e-3, 1),
     ],
 )
 def test_cross_validation(

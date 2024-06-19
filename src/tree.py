@@ -1,4 +1,5 @@
 import os
+from typing import Optional
 
 import matplotlib.pyplot as plt  # type: ignore
 import networkx as nx  # type: ignore
@@ -46,7 +47,12 @@ class WeisfeilerLemanLabelingTree:
     # initialization #
     ##################
     def __init__(
-        self, data: Dataset, depth: int, exp_parameter: bool = True, norm: bool = False
+        self,
+        data: Dataset,
+        depth: int,
+        exp_parameter: bool = True,
+        norm: bool = False,
+        edgelabel: Optional[bool] = None,
     ) -> None:
         """initialize WLLT
 
@@ -55,11 +61,18 @@ class WeisfeilerLemanLabelingTree:
             depth (int): Number of layers in WLLT
             exp_parameter (bool, optional): Whether to set weight as exp(parameter). Defaults to True.
             norm (bool, optional): Whether to normalize the distribution. Defaults to False.
+            edgelabel (Optional[bool], optional): Whether to consider edge labels. If None, consider edge labels when data have them. Defaults to None.
         """
         self.depth = depth
         self.exp_parameter = exp_parameter
         self.norm = norm
         assert self.depth > 0, "Depth should be greater than 0"
+        if edgelabel is True:
+            assert data[0].edge_attr is not None, "Data does not have edge labels"
+        if edgelabel is None:
+            self.edgelabel = data[0].edge_attr is not None
+        else:
+            self.edgelabel = edgelabel
         self._build_tree(data)
 
     def _adjancy_list(self, graph: Data) -> list[list[tuple[int, int]]]:
@@ -121,7 +134,15 @@ class WeisfeilerLemanLabelingTree:
                                 [
                                     (
                                         current_labeling[nv],
-                                        int(torch.argmax(g.edge_attr[edge_idx]).item()),
+                                        (
+                                            int(
+                                                torch.argmax(
+                                                    g.edge_attr[edge_idx]
+                                                ).item()
+                                            )
+                                            if self.edgelabel
+                                            else 0
+                                        ),
                                     )
                                     for nv, edge_idx in adj_list[node_idx]
                                 ]
@@ -158,8 +179,8 @@ class WeisfeilerLemanLabelingTree:
                 label_idx = tuple2int[(layer_idx - 1, key[0])]
                 neighbors_idx = tuple(
                     [
-                        (tuple2int[(layer_idx - 1, nv)], edge_idx)
-                        for nv, edge_idx in key[1]
+                        (tuple2int[(layer_idx - 1, nv)], edge_val)
+                        for nv, edge_val in key[1]
                     ]
                 )  # already sorted
                 self.labeling_hash[(label_idx, neighbors_idx)] = tuple2int[
@@ -203,7 +224,15 @@ class WeisfeilerLemanLabelingTree:
                             [
                                 (
                                     current_labeling[nv],
-                                    int(torch.argmax(graph.edge_attr[edge_idx]).item()),
+                                    (
+                                        int(
+                                            torch.argmax(
+                                                graph.edge_attr[edge_idx]
+                                            ).item()
+                                        )
+                                        if self.edgelabel
+                                        else 0
+                                    ),
                                 )
                                 for nv, edge_idx in adj_list[node_idx]
                             ]
@@ -389,7 +418,7 @@ class WeisfeilerLemanLabelingTree:
         self._prepare_inverse_dict()
 
         unfolded = nx.Graph()
-        queue = [(-1, node, -1)]  # parent, now, edge_idx
+        queue = [(-1, node, -1)]  # parent, now, edge_attr
         node_cnt = 0
         while len(queue) > 0:
             pa, now, edge_attr = queue.pop(0)
@@ -400,10 +429,13 @@ class WeisfeilerLemanLabelingTree:
                     color="tab:red" if node_cnt == 0 else "tab:blue",
                 )
                 if pa != -1:
-                    unfolded.add_edge(pa, node_cnt, label=edge_attr)
+                    if self.edgelabel:
+                        unfolded.add_edge(pa, node_cnt, label=edge_attr)
+                    else:
+                        unfolded.add_edge(pa, node_cnt)
                 _, neighbors = self.labeling_hash_inv[now]
-                for nv, edge in neighbors:
-                    queue.append((node_cnt, nv, edge))
+                for nv, edge_attr in neighbors:
+                    queue.append((node_cnt, nv, edge_attr))
             else:
                 unfolded.add_node(
                     node_cnt,
@@ -411,7 +443,10 @@ class WeisfeilerLemanLabelingTree:
                     color="tab:red" if node_cnt == 0 else "tab:blue",
                 )
                 if pa != -1:
-                    unfolded.add_edge(pa, node_cnt, label=edge_attr)
+                    if self.edgelabel:
+                        unfolded.add_edge(pa, node_cnt, label=edge_attr)
+                    else:
+                        unfolded.add_edge(pa, node_cnt)
             node_cnt += 1
         plt.figure(figsize=(10, 10))
         pos = nx.spring_layout(unfolded)
@@ -426,11 +461,14 @@ class WeisfeilerLemanLabelingTree:
             pos,
             labels=nx.get_node_attributes(unfolded, "label"),
         )
-        nx.draw_networkx_edge_labels(
-            unfolded,
-            pos,
-            edge_labels=nx.get_edge_attributes(unfolded, "label"),
-        )
+        if self.edgelabel:
+            nx.draw_networkx_edge_labels(
+                unfolded,
+                pos,
+                edge_labels=nx.get_edge_attributes(unfolded, "label"),
+            )
+        else:
+            nx.draw_networkx_edges(unfolded, pos)
         plt.savefig(path)
         plt.close()
 
@@ -474,7 +512,15 @@ class WeisfeilerLemanLabelingTree:
                             [
                                 (
                                     current_labeling[nv],
-                                    int(torch.argmax(graph.edge_attr[edge_idx]).item()),
+                                    (
+                                        int(
+                                            torch.argmax(
+                                                graph.edge_attr[edge_idx]
+                                            ).item()
+                                        )
+                                        if self.edgelabel
+                                        else 0
+                                    ),
                                 )
                                 for nv, edge_idx in adj_list[node_idx]
                             ]
@@ -513,19 +559,33 @@ class WeisfeilerLemanLabelingTree:
                     label=node_attr.item(),
                     color="tab:red" if d_hop_neighborhood[node_idx] else "tab:blue",
                 )
-            for (u, v), edge_attr in zip(
-                graph.edge_index.T, torch.argmax(graph.edge_attr, dim=1)
-            ):
-                colored_graph.add_edge(
-                    u.item(),
-                    v.item(),
-                    label=edge_attr.item(),
-                    color=(
-                        "tab:red"
-                        if d_hop_neighborhood[u.item()] and d_hop_neighborhood[v.item()]
-                        else "tab:blue"
-                    ),
-                )
+            if self.edgelabel:
+                for (u, v), edge_attr in zip(
+                    graph.edge_index.T, torch.argmax(graph.edge_attr, dim=1)
+                ):
+                    colored_graph.add_edge(
+                        u.item(),
+                        v.item(),
+                        label=edge_attr.item(),
+                        color=(
+                            "tab:red"
+                            if d_hop_neighborhood[u.item()]
+                            and d_hop_neighborhood[v.item()]
+                            else "tab:blue"
+                        ),
+                    )
+            else:
+                for u, v in graph.edge_index.T:
+                    colored_graph.add_edge(
+                        u.item(),
+                        v.item(),
+                        color=(
+                            "tab:red"
+                            if d_hop_neighborhood[u.item()]
+                            and d_hop_neighborhood[v.item()]
+                            else "tab:blue"
+                        ),
+                    )
 
             # save the image
             plt.figure(figsize=(10, 10))
@@ -550,10 +610,13 @@ class WeisfeilerLemanLabelingTree:
                 pos,
                 labels=nx.get_node_attributes(colored_graph, "label"),
             )
-            nx.draw_networkx_edge_labels(
-                colored_graph,
-                pos,
-                edge_labels=nx.get_edge_attributes(colored_graph, "label"),
-            )
+            if self.edgelabel:
+                nx.draw_networkx_edge_labels(
+                    colored_graph,
+                    pos,
+                    edge_labels=nx.get_edge_attributes(colored_graph, "label"),
+                )
+            else:
+                nx.draw_networkx_edges(colored_graph, pos)
             plt.savefig(os.path.join(path, f"{root_idx}.png"))
             plt.close()

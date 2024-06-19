@@ -490,7 +490,7 @@ def cross_validation(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--dataset_name", choices=["MUTAG", "Mutagenicity"])
+    parser.add_argument("--dataset_name", choices=["MUTAG", "Mutagenicity", "NCI1"])
     parser.add_argument(
         "--embedding",
         choices=["tree", "uniform", "sparse-uniform", "shuffle"],

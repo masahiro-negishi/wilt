@@ -330,7 +330,7 @@ def compare_distance_matrix(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dataset_name", choices=["Mutagenicity"])
+    parser.add_argument("--dataset_name", choices=["Mutagenicity", "NCI1"])
     subparsers = parser.add_subparsers(dest="function")
     calc_parser = subparsers.add_parser("calc")
     calc_parser.add_argument("--metric", choices=["WLLT", "WWLGK", "GED", "TMD"])
