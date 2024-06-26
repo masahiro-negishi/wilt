@@ -16,6 +16,8 @@ from path import DATA_DIR, DIS_MX_DIR, GNN_DIR
 from tree import WeisfeilerLemanLabelingTree
 
 NUM_PAIR = 1000
+FOLD = 0
+KFOLD = 5
 
 
 def calc_distance_matrix_WLLT_WWLGK(dataset: Dataset, metric, **kwargs) -> torch.Tensor:
@@ -54,7 +56,7 @@ def calc_distance_matrix_GED(dataset: Dataset, **kwargs) -> torch.Tensor:
     indices = np.random.RandomState(seed=0).permutation(len(dataset) * len(dataset))[
         :NUM_PAIR
     ]
-    for i in range(1000):
+    for i in range(NUM_PAIR):
         g1 = dataset[indices[i] // len(dataset)]
         g2 = dataset[indices[i] % len(dataset)]
         ANS = -1
@@ -228,10 +230,17 @@ def calc_distance_matrix_TMD(dataset: Dataset, **kwargs) -> torch.Tensor:
     indices = np.random.RandomState(seed=0).permutation(len(dataset) * len(dataset))[
         :NUM_PAIR
     ]
+    ws = [
+        None,
+        [1 / 1],
+        [1 / 2, 2 / 1],
+        [1 / 3, 3 / 3, 3 / 1],
+        [1 / 4, 4 / 6, 6 / 4, 4 / 1],
+    ]
     for i in range(NUM_PAIR):
         g1 = dataset[indices[i] // len(dataset)]
         g2 = dataset[indices[i] % len(dataset)]
-        distance_matrix[i] = TMD(g1, g2, 0.5, kwargs["depth"])
+        distance_matrix[i] = TMD(g1, g2, ws[kwargs["depth"] - 1], kwargs["depth"])
     return distance_matrix
 
 
@@ -276,10 +285,8 @@ def compare_distance_matrix(
     fig, axes = plt.subplots(5, 4, figsize=(16, 20))
     indices = np.random.RandomState(seed=0).permutation(
         len(dis_mx_mpnn) * len(dis_mx_mpnn)
-    )[:1000]
-    for i, ylabel in enumerate(
-        ["WLLT (unnormalized)", "WLLT (normalized)", "WWLGK", "TMD", "GED"]
-    ):
+    )[:NUM_PAIR]
+    for i, ylabel in enumerate(["WLLT (unnorm)", "WLLT (norm)", "WWLGK", "TMD", "GED"]):
         for j in range(4):
             if i == 0:
                 path_dis_mx = os.path.join(
@@ -309,7 +316,7 @@ def compare_distance_matrix(
                 path_dis_mx = os.path.join(
                     DIS_MX_DIR,
                     dataset_name,
-                    f"GED.pt",
+                    f"GED_t=30.pt",
                 )
                 if j != 0:
                     continue
@@ -320,18 +327,20 @@ def compare_distance_matrix(
                 )
             else:
                 axes[i, j].scatter(dis_mx.flatten(), dis_mx_mpnn.flatten()[indices])
-            if j == 0:
-                axes[i, j].set_ylabel(ylabel)
-            if i == 4:
-                axes[i, j].set_xlabel(str(j + 1))
+            if i <= 3:
+                axes[i, j].set_title(f"{ylabel} (d={j+1})")
+            else:
+                axes[i, j].set_title(f"{ylabel}")
             print(i, j)
+    fig.supylabel("Distance between MPNN embeddings", size="xx-large")
+    fig.supxlabel("Distance based on various metrics", size="xx-large")
     os.makedirs(os.path.dirname(path), exist_ok=True)
     plt.savefig(path)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dataset_name", choices=["Mutagenicity", "NCI1"])
+    parser.add_argument("--dataset_name", choices=["MUTAG", "Mutagenicity", "NCI1"])
     subparsers = parser.add_subparsers(dest="function")
     calc_parser = subparsers.add_parser("calc")
     calc_parser.add_argument("--metric", choices=["WLLT", "WWLGK", "GED", "TMD"])
