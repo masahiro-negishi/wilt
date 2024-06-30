@@ -328,8 +328,10 @@ def train_wrapper(
         **kwargs: additional arguments
     """
 
-    if dataset_name == "synthetic":
-        data = torch.load(os.path.join(DATA_DIR, "synthetic", "dataset.pt"))
+    if dataset_name in ["synthetic_cls", "synthetic_reg"]:
+        data = torch.load(
+            os.path.join(DATA_DIR, "synthetic", dataset_name[-3:], "dataset.pt")
+        )
     else:
         data = TUDataset(root=os.path.join(DATA_DIR, "TUDataset"), name=dataset_name)
     tree_start = time.time()
@@ -402,7 +404,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
-        "--dataset_name", choices=["MUTAG", "Mutagenicity", "NCI1", "synthetic"]
+        "--dataset_name",
+        choices=["MUTAG", "Mutagenicity", "NCI1", "synthetic_cls", "synthetic_reg"],
     )
     parser.add_argument(
         "--embedding",
@@ -450,7 +453,7 @@ if __name__ == "__main__":
         args.gnn,
         args.gnn_distance,
         f"d{args.depth}",
-        f"{norm}_l={args.loss_name}_a={args.absolute}_b={args.batch_size}_e={args.n_epochs}_lr={args.lr}_c={args.clip_param_threshold}_s={args.seed}_e={args.embedding}",
+        f"{norm}_l={args.loss_name}_a={args.absolute}_l1={args.l1coeff}_b={args.batch_size}_e={args.n_epochs}_lr={args.lr}_c={args.clip_param_threshold}_s={args.seed}_e={args.embedding}",
     )
 
     if os.path.exists(os.path.join(kwargs["path"], "info.json")):
