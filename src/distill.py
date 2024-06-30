@@ -146,6 +146,7 @@ def train_gd(
     path: str,
     loss_name: str,
     absolute: bool,
+    l1coeff: float,
     batch_size: int,
     n_epochs: int,
     lr: float,
@@ -163,6 +164,7 @@ def train_gd(
         path (str): path to the directory to save the results
         loss_name (str): name of the loss function
         absolute (bool): whether to use absolute error
+        l1coeff (float): coefficient for L1 regularization
         batch_size (int): batch size
         n_epochs (int): number of epochs
         lr (float): learning rate
@@ -236,6 +238,7 @@ def train_gd(
                 loss = loss_fn(
                     prediction / torch.clamp(y, min=1e-10), torch.ones(len(y))
                 )
+            loss += torch.sum(torch.abs(tree.parameter)) * l1coeff
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
@@ -300,7 +303,7 @@ def train_gd(
     return abs_norm_mean
 
 
-def cross_validation(
+def train_wrapper(
     dataset_name: str,
     embedding: str,
     depth: int,
@@ -311,7 +314,7 @@ def cross_validation(
     path: str,
     **kwargs,
 ):
-    """train the model with cross validation
+    """wrapper function for training
 
     Args:
         dataset_name (str): dataset name
@@ -356,6 +359,7 @@ def cross_validation(
         os.path.join(path, f"fold0"),
         kwargs["loss_name"],
         kwargs["absolute"],
+        kwargs["l1coeff"],
         kwargs["batch_size"],
         kwargs["n_epochs"],
         kwargs["lr"],
@@ -377,6 +381,7 @@ def cross_validation(
         "tree_time": tree_end - tree_start,
         "loss_name": kwargs["loss_name"],
         "absolute": kwargs["absolute"],
+        "l1coeff": kwargs["l1coeff"],
         "batch_size": kwargs["batch_size"],
         "n_epochs": kwargs["n_epochs"],
         "lr": kwargs["lr"],
@@ -411,6 +416,7 @@ if __name__ == "__main__":
     parser.add_argument("--gnn_distance", type=str, choices=["l1", "l2"])
     parser.add_argument("--loss_name", type=str, choices=["l1", "l2"])
     parser.add_argument("--absolute", action="store_true")
+    parser.add_argument("--l1coeff", type=float)
     parser.add_argument("--batch_size", type=int)
     parser.add_argument("--n_epochs", type=int)
     parser.add_argument("--lr", type=float)
@@ -451,4 +457,4 @@ if __name__ == "__main__":
         print(f"{kwargs['path']} already exists")
         exit()
     os.makedirs(kwargs["path"], exist_ok=True)
-    cross_validation(**kwargs)
+    train_wrapper(**kwargs)
