@@ -13,7 +13,7 @@ from torch import nn
 from torch.optim import Adam
 from torch.utils.data import BatchSampler
 from torch_geometric.data import Dataset  # type: ignore
-from torch_geometric.datasets import TUDataset  # type: ignore
+from torch_geometric.datasets import ZINC, TUDataset  # type: ignore
 
 from path import DATA_DIR, GNN_DIR, RESULT_DIR  # type: ignore
 from tree import WeisfeilerLemanLabelingTree
@@ -332,6 +332,8 @@ def train_wrapper(
         data = torch.load(
             os.path.join(DATA_DIR, "synthetic", dataset_name[-3:], "dataset.pt")
         )
+    elif dataset_name == "ZINC":
+        data = ZINC(root=os.path.join(DATA_DIR, "ZINC"), subset=True, split="train")
     else:
         data = TUDataset(root=os.path.join(DATA_DIR, "TUDataset"), name=dataset_name)
     tree_start = time.time()
@@ -405,7 +407,14 @@ if __name__ == "__main__":
 
     parser.add_argument(
         "--dataset_name",
-        choices=["MUTAG", "Mutagenicity", "NCI1", "synthetic_cls", "synthetic_reg"],
+        choices=[
+            "MUTAG",
+            "Mutagenicity",
+            "NCI1",
+            "synthetic_cls",
+            "synthetic_reg",
+            "ZINC",
+        ],
     )
     parser.add_argument(
         "--embedding",

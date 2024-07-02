@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt  # type: ignore
 import networkx as nx  # type: ignore
 import torch
 from torch_geometric.data import Batch, Data, Dataset  # type: ignore
+from torch_geometric.datasets import ZINC, TUDataset  # type: ignore
 
 
 class WeisfeilerLemanLabelingTree:
@@ -73,7 +74,56 @@ class WeisfeilerLemanLabelingTree:
             self.edgelabel = data[0].edge_attr is not None
         else:
             self.edgelabel = edgelabel
+        if type(data) == TUDataset:
+            self.onehot_node_label = True
+            if self.edgelabel:
+                self.onehot_edge_label = True
+        elif type(data) == ZINC:
+            self.onehot_node_label = False
+            self.onehot_edge_label = False
+        else:
+            self.onehot_node_label = self._check_node_label_encoding(data)
+            if self.edgelabel:
+                self.onehot_edge_label = self._check_edge_label_encoding(data)
         self._build_tree(data)
+
+    def _check_node_label_encoding(self, data: Dataset) -> bool:
+        """return whether node label is one-hot
+
+        Args:
+            data (Dataset): Dataset
+
+        Returns:
+            bool: whether node label is one-hot
+        """
+        if len(data[0].x.shape) != 2:
+            return False
+        if data[0].x.shape[1] == 1:
+            return False
+        for g in data:
+            for v in g.x:
+                if torch.sum(v) != 1 or len(torch.nonzero(v)) != len(v) - 1:
+                    return False
+        return True
+
+    def _check_edge_label_encoding(self, data: Dataset) -> bool:
+        """return whether edge label is one-hot
+
+        Args:
+            data (Dataset): Dataset
+
+        Returns:
+            bool: whether edge label is one-hot
+        """
+        if len(data[0].edge_attr.shape) != 2:
+            return False
+        if data[0].edge_attr.shape[1] == 1:
+            return False
+        for g in data:
+            for e in g.edge_attr:
+                if torch.sum(e) != 1 or len(torch.nonzero(e)) != len(e) - 1:
+                    return False
+        return True
 
     def _adjancy_list(self, graph: Data) -> list[list[tuple[int, int]]]:
         """convert edge_index to adjancy list
@@ -114,7 +164,9 @@ class WeisfeilerLemanLabelingTree:
         for g in data:
             # initial labeling # O(|V|)
             current_labeling: list[int] = [-1 for _ in range(g.num_nodes)]
-            for node_idx, node_attr in enumerate(torch.argmax(g.x, dim=1)):
+            for node_idx, node_attr in enumerate(
+                torch.argmax(g.x, dim=1) if self.onehot_node_label else g.x.reshape(-1)
+            ):
                 if attr2label.get(node_attr.item()) is None:
                     attr2label[node_attr.item()] = cnt_nodes[1]
                     cnt_nodes[1] += 1
@@ -139,6 +191,8 @@ class WeisfeilerLemanLabelingTree:
                                                 torch.argmax(
                                                     g.edge_attr[edge_idx]
                                                 ).item()
+                                                if self.onehot_edge_label
+                                                else g.edge_attr[edge_idx].item()
                                             )
                                             if self.edgelabel
                                             else 0
@@ -207,7 +261,11 @@ class WeisfeilerLemanLabelingTree:
         # root node
         dist[0] = graph.num_nodes
         # initial labeling
-        for node_idx, node_attr in enumerate(torch.argmax(graph.x, dim=1)):
+        for node_idx, node_attr in enumerate(
+            torch.argmax(graph.x, dim=1)
+            if self.onehot_node_label
+            else graph.x.reshape(-1)
+        ):
             current_labeling[node_idx] = self.attr2label[node_attr.item()]
             dist[self.attr2label[node_attr.item()]] += 1
         # adjancy_list
@@ -229,6 +287,8 @@ class WeisfeilerLemanLabelingTree:
                                             torch.argmax(
                                                 graph.edge_attr[edge_idx]
                                             ).item()
+                                            if self.onehot_edge_label
+                                            else graph.edge_attr[edge_idx].item()
                                         )
                                         if self.edgelabel
                                         else 0
@@ -493,7 +553,11 @@ class WeisfeilerLemanLabelingTree:
         root_candidate: list[bool] = [False for _ in range(graph.num_nodes)]
         root_depth = -1
         # initial labeling
-        for node_idx, node_attr in enumerate(torch.argmax(graph.x, dim=1)):
+        for node_idx, node_attr in enumerate(
+            torch.argmax(graph.x, dim=1)
+            if self.onehot_node_label
+            else graph.x.reshape(-1)
+        ):
             current_labeling[node_idx] = self.attr2label[node_attr.item()]
             if self.attr2label[node_attr.item()] == node_wllt:
                 root_candidate[node_idx] = True
@@ -517,6 +581,8 @@ class WeisfeilerLemanLabelingTree:
                                             torch.argmax(
                                                 graph.edge_attr[edge_idx]
                                             ).item()
+                                            if self.onehot_edge_label
+                                            else graph.edge_attr[edge_idx].item()
                                         )
                                         if self.edgelabel
                                         else 0
@@ -553,7 +619,11 @@ class WeisfeilerLemanLabelingTree:
                 current_neighbors = next_neighbors
             # color the nodes and edges
             colored_graph = nx.Graph()
-            for node_idx, node_attr in enumerate(torch.argmax(graph.x, dim=1)):
+            for node_idx, node_attr in enumerate(
+                torch.argmax(graph.x, dim=1)
+                if self.onehot_node_label
+                else graph.x.reshape(-1)
+            ):
                 colored_graph.add_node(
                     node_idx,
                     label=node_attr.item(),
@@ -561,7 +631,12 @@ class WeisfeilerLemanLabelingTree:
                 )
             if self.edgelabel:
                 for (u, v), edge_attr in zip(
-                    graph.edge_index.T, torch.argmax(graph.edge_attr, dim=1)
+                    graph.edge_index.T,
+                    (
+                        torch.argmax(graph.edge_attr, dim=1)
+                        if self.onehot_edge_label
+                        else graph.edge_attr
+                    ),
                 ):
                     colored_graph.add_edge(
                         u.item(),
