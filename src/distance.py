@@ -49,8 +49,25 @@ def calc_distance_matrix_GED(dataset: Dataset, **kwargs) -> torch.Tensor:
 
     @timeout_decorator.timeout(kwargs["timeout"])
     def call_ged(g1, g2):
+        g1nx = to_networkx(
+            g1,
+            node_attrs=["x"],
+            edge_attrs=["edge_attr"] if g1.edge_attr is not None else None,
+            to_undirected=True,
+        )
+        g2nx = to_networkx(
+            g2,
+            node_attrs=["x"],
+            edge_attrs=["edge_attr"] if g2.edge_attr is not None else None,
+            to_undirected=True,
+        )
         nonlocal ANS
-        for tmpd in nx.optimize_graph_edit_distance(to_networkx(g1), to_networkx(g2)):
+        for tmpd in nx.optimize_graph_edit_distance(
+            g1nx,
+            g2nx,
+            lambda x, y: x == y,
+            (lambda x, y: x == y) if g1.edge_attr is not None else None,
+        ):
             ANS = tmpd
 
     distance_matrix = torch.zeros(NUM_PAIR)
@@ -95,12 +112,13 @@ def get_neighbors(g: Data) -> dict[int, list[int]]:
     return adj
 
 
-def TMD(g1: Data, g2: Data, w: float | list[float], L: int = 4):
+def TMD(g1: Data, g2: Data, dataset_name: str, w: float | list[float], L: int = 4):
     """Tree Mover's Distance between two graphs.
 
     Args:
         g1 (Data): graph 1
         g2 (Data): graph 2
+        dataset_name (str): name of the dataset
         w (float | list[float]): weight constant(s) for each depth
         L (int, optional): Depth of computation trees for calculating TMD. Defaults to 4.
 
@@ -117,7 +135,16 @@ def TMD(g1: Data, g2: Data, w: float | list[float], L: int = 4):
 
     # get attributes
     n1, n2 = len(g1.x), len(g2.x)
-    feat1, feat2 = g1.x, g2.x
+    if dataset_name in ["ZINC", "Lipo"]:
+        feat1 = torch.zeros(n1, max(torch.max(g1.x).item(), torch.max(g2.x).item()) + 1)
+        feat2 = torch.zeros(n2, max(torch.max(g1.x).item(), torch.max(g2.x).item()) + 1)
+        for i in range(n1):
+            feat1[i, g1.x[i].item()] = 1
+        for i in range(n2):
+            feat2[i, g2.x[i].item()] = 1
+    else:
+        feat1 = g1.x
+        feat2 = g2.x
     adj1 = get_neighbors(g1)
     adj2 = get_neighbors(g2)
 
@@ -226,7 +253,9 @@ def TMD(g1: Data, g2: Data, w: float | list[float], L: int = 4):
     return wass
 
 
-def calc_distance_matrix_TMD(dataset: Dataset, **kwargs) -> torch.Tensor:
+def calc_distance_matrix_TMD(
+    dataset: Dataset, dataset_name: str, **kwargs
+) -> torch.Tensor:
     distance_matrix = torch.zeros(NUM_PAIR)
     indices = np.random.RandomState(seed=0).permutation(len(dataset) * len(dataset))[
         :NUM_PAIR
@@ -241,7 +270,9 @@ def calc_distance_matrix_TMD(dataset: Dataset, **kwargs) -> torch.Tensor:
     for i in range(NUM_PAIR):
         g1 = dataset[indices[i] // len(dataset)]
         g2 = dataset[indices[i] % len(dataset)]
-        distance_matrix[i] = TMD(g1, g2, ws[kwargs["depth"] - 1], kwargs["depth"])
+        distance_matrix[i] = TMD(
+            g1, g2, dataset_name, ws[kwargs["depth"] - 1], kwargs["depth"]
+        )
     return distance_matrix
 
 
@@ -259,13 +290,38 @@ def calc_distance_matrix(
         path (str): The path to save the distance matrix.
         **kwargs: additional arguments
     """
-    dataset = TUDataset(root=os.path.join(DATA_DIR, "TUDataset"), name=dataset_name)
+    if dataset_name == "ZINC":
+        dataset = ZINC(root=os.path.join(DATA_DIR, "ZINC"), subset=True, split="train")
+    elif dataset_name == "Lipo":
+        dataset = MoleculeNet(root=os.path.join(DATA_DIR, "Lipo"), name="Lipo")
+        converted = []
+        xdict: dict[tuple, int] = {}
+        edict: dict[tuple, int] = {}
+        for d in dataset:
+            newx = torch.zeros(len(d.x), 1, dtype=torch.int32)
+            for i, x in enumerate(d.x):
+                idx = tuple(x.tolist())
+                if idx not in xdict:
+                    xdict[idx] = len(xdict)
+                newx[i][0] = xdict[idx]
+            newe = torch.zeros(len(d.edge_attr), 1, dtype=torch.int32)
+            for i, e in enumerate(d.edge_attr):
+                idx = tuple(e.tolist())
+                if idx not in edict:
+                    edict[idx] = len(edict)
+                newe[i][0] = edict[idx]
+            converted.append(
+                Data(x=newx, edge_attr=newe, edge_index=d.edge_index, y=d.y)
+            )
+        dataset = converted
+    else:
+        dataset = TUDataset(root=os.path.join(DATA_DIR, "TUDataset"), name=dataset_name)
     if metric == "WLLT" or metric == "WWLGK":
         distance_matrix = calc_distance_matrix_WLLT_WWLGK(dataset, metric, **kwargs)
     elif metric == "GED":
         distance_matrix = calc_distance_matrix_GED(dataset, **kwargs)
     elif metric == "TMD":
-        distance_matrix = calc_distance_matrix_TMD(dataset, **kwargs)
+        distance_matrix = calc_distance_matrix_TMD(dataset, dataset_name, **kwargs)
     else:
         raise NotImplementedError
     torch.save(distance_matrix, path)
@@ -341,7 +397,10 @@ def compare_distance_matrix(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dataset_name", choices=["MUTAG", "Mutagenicity", "NCI1"])
+    parser.add_argument(
+        "--dataset_name",
+        choices=["MUTAG", "Mutagenicity", "NCI1", "ENZYMES", "ZINC", "Lipo"],
+    )
     subparsers = parser.add_subparsers(dest="function")
     calc_parser = subparsers.add_parser("calc")
     calc_parser.add_argument("--metric", choices=["WLLT", "WWLGK", "GED", "TMD"])
