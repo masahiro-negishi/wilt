@@ -340,13 +340,13 @@ def train_wrapper(
         xdict = {}
         edict = {}
         for d in data:
-            newx = torch.zeros(len(d.x), 1)
+            newx = torch.zeros(len(d.x), 1, dtype=torch.int32)
             for i, x in enumerate(d.x):
                 idx = tuple(x.tolist())
                 if idx not in xdict:
                     xdict[idx] = len(xdict)
                 newx[i][0] = xdict[idx]
-            newe = torch.zeros(len(d.edge_attr), 1)
+            newe = torch.zeros(len(d.edge_attr), 1, dtype=torch.int32)
             for i, e in enumerate(d.edge_attr):
                 idx = tuple(e.tolist())
                 if idx not in edict:
