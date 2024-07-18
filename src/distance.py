@@ -28,16 +28,17 @@ def calc_distance_matrix_WLLT_WWLGK(dataset: Dataset, metric, **kwargs) -> torch
         kwargs["normalize"] if metric == "WLLT" else True,
         False if metric == "WWLGK" else None,
     )
+    indices = np.random.RandomState(seed=0).permutation(len(dataset) * len(dataset))[
+        :NUM_PAIR
+    ]
     embeddings = torch.stack([tree.calc_subtree_weights(g) for g in dataset], dim=0)
     tree.eval()
-    distance_matrix = torch.stack(
-        [
-            tree.calc_distance_between_subtree_weights(
-                embeddings[k].repeat(len(dataset), 1), embeddings
-            )
-            for k in range(len(dataset))
-        ]
-    )
+    distance_matrix = torch.zeros(NUM_PAIR)
+    for i in range(NUM_PAIR):
+        distance_matrix[i] = tree.calc_distance_between_subtree_weights(
+            embeddings[indices[i] // len(dataset)],
+            embeddings[indices[i] % len(dataset)],
+        )
     if metric == "WWLGK":
         distance_matrix /= 2 * kwargs["depth"]
     return distance_matrix
