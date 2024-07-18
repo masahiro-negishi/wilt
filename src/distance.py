@@ -6,10 +6,11 @@ import matplotlib.pyplot as plt  # type: ignore
 import networkx as nx  # type: ignore
 import numpy as np
 import ot  # type: ignore
+import scipy as sp  # type: ignore
 import timeout_decorator  # type: ignore
 import torch
 from torch_geometric.data import Data, Dataset  # type: ignore
-from torch_geometric.datasets import TUDataset  # type: ignore
+from torch_geometric.datasets import ZINC, MoleculeNet, TUDataset  # type: ignore
 from torch_geometric.utils import to_networkx  # type: ignore
 
 from path import DATA_DIR, DIS_MX_DIR, GNN_DIR
@@ -339,56 +340,31 @@ def compare_distance_matrix(
         dis_mx_mpnn (torch.Tensor): distance matrix from GNN embeddings
         path (str): path to save the scatter plot
     """
-    fig, axes = plt.subplots(5, 4, figsize=(16, 20))
+    fig, axes = plt.subplots(1, 3, figsize=(12, 4))
     indices = np.random.RandomState(seed=0).permutation(
         len(dis_mx_mpnn) * len(dis_mx_mpnn)
     )[:NUM_PAIR]
-    for i, ylabel in enumerate(["WLLT (unnorm)", "WLLT (norm)", "WWLGK", "TMD", "GED"]):
-        for j in range(4):
-            if i == 0:
-                path_dis_mx = os.path.join(
-                    DIS_MX_DIR,
-                    dataset_name,
-                    f"WLLT_d={j+1}_norm=False.pt",
-                )
-            elif i == 1:
-                path_dis_mx = os.path.join(
-                    DIS_MX_DIR,
-                    dataset_name,
-                    f"WLLT_d={j+1}_norm=True.pt",
-                )
-            elif i == 2:
-                path_dis_mx = os.path.join(
-                    DIS_MX_DIR,
-                    dataset_name,
-                    f"WWLGK_d={j+1}.pt",
-                )
-            elif i == 3:
-                path_dis_mx = os.path.join(
-                    DIS_MX_DIR,
-                    dataset_name,
-                    f"TMD_d={j+1}.pt",
-                )
-            elif i == 4:
-                path_dis_mx = os.path.join(
-                    DIS_MX_DIR,
-                    dataset_name,
-                    f"GED_t=30.pt",
-                )
-                if j != 0:
-                    continue
-            dis_mx = torch.load(path_dis_mx)
-            if i <= 2:
-                axes[i, j].scatter(
-                    dis_mx.flatten()[indices], dis_mx_mpnn.flatten()[indices]
-                )
-            else:
-                axes[i, j].scatter(dis_mx.flatten(), dis_mx_mpnn.flatten()[indices])
-            if i <= 3:
-                axes[i, j].set_title(f"{ylabel} (d={j+1})")
-            else:
-                axes[i, j].set_title(f"{ylabel}")
-            print(i, j)
+    for i, (xlabel, filename) in enumerate(
+        zip(["WWLGK", "TMD", "GED"], ["WWLGK_d=4.pt", "TMD_d=4.pt", "GED_t=30.pt"])
+    ):
+        path_dis_mx = os.path.join(
+            DIS_MX_DIR,
+            dataset_name,
+            filename,
+        )
+        dis_mx = torch.load(path_dis_mx)
+        x = dis_mx.flatten()
+        y = dis_mx_mpnn.flatten()[indices]
+        x = x.numpy()
+        y = y.numpy()
+        x /= np.max(x)
+        y /= np.max(y)
+        axes[i].scatter(x, y)
+        pear = np.corrcoef(x, y)[0, 1]
+        spear = sp.stats.spearmanr(x, y).statistic
+        coeff = np.sum(x * y) / np.sum(x**2)
+        rmse = np.sqrt(np.mean((y - coeff * x) ** 2))
+        axes[i].set_title(f"{xlabel}, p={pear:.2f}, s={spear:.2f}, rmse={rmse:.2f}")
     fig.supylabel("Distance between MPNN embeddings", size="xx-large")
     fig.supxlabel("Distance based on various metrics", size="xx-large")
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -450,12 +426,12 @@ if __name__ == "__main__":
                             model,
                             str(args.gnn_depth),
                             "fold0",
-                            f"dist_{metric}.pt",
+                            f"dist_{metric}_last.pt",
                         )
                     ),
                     os.path.join(
                         DIS_MX_DIR,
                         args.dataset_name,
-                        f"{model}_d=3_{metric}.png",
+                        f"{model}_d=3_{metric}_last.png",
                     ),
                 )
