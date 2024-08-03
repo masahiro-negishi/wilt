@@ -15,6 +15,7 @@ from torch_geometric.utils import to_networkx  # type: ignore
 
 from path import DATA_DIR, DIS_MX_DIR, GNN_DIR
 from tree import WeisfeilerLemanLabelingTree
+from utils import load_dataset
 
 NUM_PAIR = 1000
 FOLD = 0
@@ -291,32 +292,8 @@ def calc_distance_matrix(
         path (str): The path to save the distance matrix.
         **kwargs: additional arguments
     """
-    if dataset_name == "ZINC":
-        dataset = ZINC(root=os.path.join(DATA_DIR, "ZINC"), subset=True, split="train")
-    elif dataset_name == "Lipo":
-        dataset = MoleculeNet(root=os.path.join(DATA_DIR, "Lipo"), name="Lipo")
-        converted = []
-        xdict: dict[tuple, int] = {}
-        edict: dict[tuple, int] = {}
-        for d in dataset:
-            newx = torch.zeros(len(d.x), 1, dtype=torch.int32)
-            for i, x in enumerate(d.x):
-                idx = tuple(x.tolist())
-                if idx not in xdict:
-                    xdict[idx] = len(xdict)
-                newx[i][0] = xdict[idx]
-            newe = torch.zeros(len(d.edge_attr), 1, dtype=torch.int32)
-            for i, e in enumerate(d.edge_attr):
-                idx = tuple(e.tolist())
-                if idx not in edict:
-                    edict[idx] = len(edict)
-                newe[i][0] = edict[idx]
-            converted.append(
-                Data(x=newx, edge_attr=newe, edge_index=d.edge_index, y=d.y)
-            )
-        dataset = converted
-    else:
-        dataset = TUDataset(root=os.path.join(DATA_DIR, "TUDataset"), name=dataset_name)
+    dataset = load_dataset(dataset_name)
+    
     if metric == "WLLT" or metric == "WWLGK":
         distance_matrix = calc_distance_matrix_WLLT_WWLGK(dataset, metric, **kwargs)
     elif metric == "GED":
