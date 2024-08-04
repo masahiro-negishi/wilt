@@ -1,5 +1,6 @@
 import os
 
+import numpy as np
 import torch
 from torch_geometric.data import Data, Dataset  # type: ignore
 from torch_geometric.datasets import ZINC, MoleculeNet, TUDataset  # type: ignore
@@ -39,3 +40,18 @@ def load_dataset(dataset_name: str) -> Dataset:
     else:
         data = TUDataset(root=os.path.join(DATA_DIR, "TUDataset"), name=dataset_name)
     return data
+
+
+def calc_rmse_wo_outliers(x1: torch.Tensor, y1: torch.Tensor) -> tuple:
+    x1 /= np.max(x1)
+    y1 /= np.max(y1)
+    c1 = np.sum(x1 * y1) / np.sum(x1**2)
+    diff = np.abs(y1 - c1 * x1)
+    sorted_indices = np.argsort(diff)
+    n_outliers = len(sorted_indices) // 100
+    x = x1[sorted_indices[:-n_outliers]]
+    y = y1[sorted_indices[:-n_outliers]]
+    x /= np.max(x)
+    y /= np.max(y)
+    coeff = np.sum(x * y) / np.sum(x**2)
+    return x, y, coeff, np.sqrt(np.mean((y - coeff * x) ** 2))

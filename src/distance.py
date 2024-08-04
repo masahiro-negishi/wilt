@@ -15,7 +15,7 @@ from torch_geometric.utils import to_networkx  # type: ignore
 
 from path import DATA_DIR, DIS_MX_DIR, GNN_DIR, RESULT_DIR  # type: ignore
 from tree import WeisfeilerLemanLabelingTree  # type: ignore
-from utils import load_dataset  # type: ignore
+from utils import calc_rmse_wo_outliers, load_dataset  # type: ignore
 
 NUM_PAIR = 1000
 FOLD = 0
@@ -354,24 +354,12 @@ def compare_distance_matrix(
             filename,
         )
         dis_mx = torch.load(path_dis_mx)
-        # x1 = dis_mx.flatten().numpy()
-        # y1 = dis_mx_mpnn.flatten()[indices].numpy()
-        # x1 /= np.max(x1)
-        # y1 /= np.max(y1)
-        # c1 = np.sum(x1 * y1) / np.sum(x1**2)
-        # diff = np.abs(y1 - c1 * x1)
-        # sorted_indices = np.argsort(diff)
-        # x = x1[sorted_indices[:-10]]
-        # y = y1[sorted_indices[:-10]]
-        x = dis_mx.flatten().numpy()
-        y = dis_mx_mpnn.flatten()[indices].numpy()
-        x /= np.max(x)
-        y /= np.max(y)
+        x, y, coeff, rmse = calc_rmse_wo_outliers(
+            dis_mx.flatten().numpy(), dis_mx_mpnn.flatten()[indices].numpy()
+        )
         axes[i].scatter(x, y)
         pear = np.corrcoef(x, y)[0, 1]
         spear = sp.stats.spearmanr(x, y).statistic
-        coeff = np.sum(x * y) / np.sum(x**2)
-        rmse = np.sqrt(np.mean((y - coeff * x) ** 2))
         axes[i].plot(
             np.linspace(0, 1, 100),
             coeff * np.linspace(0, 1, 100),
