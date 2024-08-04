@@ -13,16 +13,18 @@ from torch_geometric.data import Data, Dataset  # type: ignore
 from torch_geometric.datasets import ZINC, MoleculeNet, TUDataset  # type: ignore
 from torch_geometric.utils import to_networkx  # type: ignore
 
-from path import DATA_DIR, DIS_MX_DIR, GNN_DIR
-from tree import WeisfeilerLemanLabelingTree
-from utils import load_dataset
+from path import DATA_DIR, DIS_MX_DIR, GNN_DIR, RESULT_DIR  # type: ignore
+from tree import WeisfeilerLemanLabelingTree  # type: ignore
+from utils import load_dataset  # type: ignore
 
 NUM_PAIR = 1000
 FOLD = 0
 KFOLD = 5
 
 
-def calc_distance_matrix_WLLT_WWLGK(dataset: Dataset, metric, **kwargs) -> torch.Tensor:
+def calc_distance_matrix_WLLT_WWLGK(
+    dataset: Dataset, dataset_name, metric, **kwargs
+) -> torch.Tensor:
     tree = WeisfeilerLemanLabelingTree(
         dataset,
         kwargs["depth"],
@@ -30,6 +32,21 @@ def calc_distance_matrix_WLLT_WWLGK(dataset: Dataset, metric, **kwargs) -> torch
         kwargs["normalize"] if metric == "WLLT" else True,
         False if metric == "WWLGK" else None,
     )
+    if metric == "WLLT":
+        l1coeff = kwargs["l1coeff"] if "l1coeff" in kwargs else 0.01
+        gnn_distance = kwargs["gnn_distance"] if "gnn_distance" in kwargs else "l1"
+        tree.load_parameter(
+            os.path.join(
+                RESULT_DIR,
+                dataset_name,
+                kwargs["model"],
+                gnn_distance,
+                f"d{kwargs['depth']}",
+                f"unnorm_l=l2_a=True_l1={l1coeff}_b=256_e=10_lr=0.01_c=0.0_s=0_e=tree",
+                "fold0",
+                "model_final.pt",
+            )
+        )
     indices = np.random.RandomState(seed=0).permutation(len(dataset) * len(dataset))[
         :NUM_PAIR
     ]
@@ -293,9 +310,11 @@ def calc_distance_matrix(
         **kwargs: additional arguments
     """
     dataset = load_dataset(dataset_name)
-    
+
     if metric == "WLLT" or metric == "WWLGK":
-        distance_matrix = calc_distance_matrix_WLLT_WWLGK(dataset, metric, **kwargs)
+        distance_matrix = calc_distance_matrix_WLLT_WWLGK(
+            dataset, dataset_name, metric, **kwargs
+        )
     elif metric == "GED":
         distance_matrix = calc_distance_matrix_GED(dataset, **kwargs)
     elif metric == "TMD":
@@ -308,6 +327,7 @@ def calc_distance_matrix(
 def compare_distance_matrix(
     dataset_name: str,
     dis_mx_mpnn: torch.Tensor,
+    model: str,
     path: str,
 ) -> None:
     """_summary_
@@ -315,14 +335,18 @@ def compare_distance_matrix(
     Args:
         dataset_name (str): name of the dataset
         dis_mx_mpnn (torch.Tensor): distance matrix from GNN embeddings
+        model (str): model name
         path (str): path to save the scatter plot
     """
-    fig, axes = plt.subplots(1, 3, figsize=(12, 4))
+    fig, axes = plt.subplots(1, 4, figsize=(16, 4))
     indices = np.random.RandomState(seed=0).permutation(
         len(dis_mx_mpnn) * len(dis_mx_mpnn)
     )[:NUM_PAIR]
     for i, (xlabel, filename) in enumerate(
-        zip(["WWLGK", "TMD", "GED"], ["WWLGK_d=4.pt", "TMD_d=4.pt", "GED_t=30.pt"])
+        zip(
+            ["WLLT", "WWLGK", "TMD", "GED"],
+            [f"WLLT_d=4_{model}.pt", "WWLGK_d=4.pt", "TMD_d=4.pt", "GED_t=30.pt"],
+        )
     ):
         path_dis_mx = os.path.join(
             DIS_MX_DIR,
@@ -330,10 +354,17 @@ def compare_distance_matrix(
             filename,
         )
         dis_mx = torch.load(path_dis_mx)
-        x = dis_mx.flatten()
-        y = dis_mx_mpnn.flatten()[indices]
-        x = x.numpy()
-        y = y.numpy()
+        # x1 = dis_mx.flatten().numpy()
+        # y1 = dis_mx_mpnn.flatten()[indices].numpy()
+        # x1 /= np.max(x1)
+        # y1 /= np.max(y1)
+        # c1 = np.sum(x1 * y1) / np.sum(x1**2)
+        # diff = np.abs(y1 - c1 * x1)
+        # sorted_indices = np.argsort(diff)
+        # x = x1[sorted_indices[:-10]]
+        # y = y1[sorted_indices[:-10]]
+        x = dis_mx.flatten().numpy()
+        y = dis_mx_mpnn.flatten()[indices].numpy()
         x /= np.max(x)
         y /= np.max(y)
         axes[i].scatter(x, y)
@@ -341,7 +372,14 @@ def compare_distance_matrix(
         spear = sp.stats.spearmanr(x, y).statistic
         coeff = np.sum(x * y) / np.sum(x**2)
         rmse = np.sqrt(np.mean((y - coeff * x) ** 2))
+        axes[i].plot(
+            np.linspace(0, 1, 100),
+            coeff * np.linspace(0, 1, 100),
+            color="red",
+            label=f"y={coeff:.2f}x",
+        )
         axes[i].set_title(f"{xlabel}, p={pear:.2f}, s={spear:.2f}, rmse={rmse:.2f}")
+        axes[i].legend()
     fig.supylabel("Distance between MPNN embeddings", size="xx-large")
     fig.supxlabel("Distance based on various metrics", size="xx-large")
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -358,6 +396,7 @@ if __name__ == "__main__":
     calc_parser = subparsers.add_parser("calc")
     calc_parser.add_argument("--metric", choices=["WLLT", "WWLGK", "GED", "TMD"])
     calc_parser.add_argument("--depth", type=int, required=False)
+    calc_parser.add_argument("--model", type=str, required=False)
     calc_parser.add_argument("--normalize", action="store_true", required=False)
     calc_parser.add_argument("--timeout", type=int, required=False)
     compare_parser = subparsers.add_parser("compare")
@@ -368,7 +407,7 @@ if __name__ == "__main__":
             path = os.path.join(
                 DIS_MX_DIR,
                 args.dataset_name,
-                f"{args.metric}_d={args.depth}_norm={args.normalize}.pt",
+                f"{args.metric}_d={args.depth}_{args.model}.pt",
             )
         elif args.metric == "WWLGK":
             path = os.path.join(
@@ -392,7 +431,7 @@ if __name__ == "__main__":
             os.makedirs(os.path.dirname(path))
         calc_distance_matrix(**args.__dict__, path=path)
     elif args.function == "compare":
-        for model in ["gat", "gcn", "gin"]:
+        for model in ["gcn", "gin"]:
             for metric in ["l1", "l2"]:
                 compare_distance_matrix(
                     args.dataset_name,
@@ -406,6 +445,7 @@ if __name__ == "__main__":
                             f"dist_{metric}_last.pt",
                         )
                     ),
+                    model,
                     os.path.join(
                         DIS_MX_DIR,
                         args.dataset_name,
