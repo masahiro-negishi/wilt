@@ -22,6 +22,23 @@ FOLD = 0
 KFOLD = 5
 
 
+def get_indices(dataset: Dataset) -> np.ndarray:
+    # return np.random.RandomState(seed=0).permutation(len(dataset) * len(dataset))[
+    #     :NUM_PAIR
+    # ]
+    n_samples = len(dataset)
+    indices_train = np.random.RandomState(seed=0).permutation(n_samples)[
+        n_samples // 5 :
+    ]
+    indices_0 = indices_train[
+        np.random.RandomState(seed=1).randint(0, len(indices_train), NUM_PAIR)
+    ]
+    indices_1 = indices_train[
+        np.random.RandomState(seed=2).randint(0, len(indices_train), NUM_PAIR)
+    ]
+    return indices_0 * n_samples + indices_1
+
+
 def calc_distance_matrix_WLLT_WWLGK(
     dataset: Dataset, dataset_name, metric, **kwargs
 ) -> torch.Tensor:
@@ -29,8 +46,12 @@ def calc_distance_matrix_WLLT_WWLGK(
         dataset,
         kwargs["depth"],
         False,
-        kwargs["normalize"] if metric == "WLLT" else True,
-        False if metric == "WWLGK" else None,
+        (
+            kwargs["normalize"]
+            if metric == "WLLT"
+            else (False if metric == "WLOA" else True)
+        ),
+        False if metric in ["WWLGK", "WLOA"] else None,
     )
     if metric == "WLLT":
         l1coeff = kwargs["l1coeff"] if "l1coeff" in kwargs else 0.01
@@ -47,9 +68,11 @@ def calc_distance_matrix_WLLT_WWLGK(
                 "model_final.pt",
             )
         )
-    indices = np.random.RandomState(seed=0).permutation(len(dataset) * len(dataset))[
-        :NUM_PAIR
-    ]
+    elif metric == "WLOA":
+        tree.parameter = torch.tensor(
+            [kwargs["depth"] / 2] + [0.5 for _ in range(len(tree.parameter) - 1)]
+        )
+    indices = get_indices(dataset)
     embeddings = torch.stack([tree.calc_subtree_weights(g) for g in dataset], dim=0)
     tree.eval()
     distance_matrix = torch.zeros(NUM_PAIR)
@@ -90,9 +113,7 @@ def calc_distance_matrix_GED(dataset: Dataset, **kwargs) -> torch.Tensor:
             ANS = tmpd
 
     distance_matrix = torch.zeros(NUM_PAIR)
-    indices = np.random.RandomState(seed=0).permutation(len(dataset) * len(dataset))[
-        :NUM_PAIR
-    ]
+    indices = get_indices(dataset)
     for i in range(NUM_PAIR):
         g1 = dataset[indices[i] // len(dataset)]
         g2 = dataset[indices[i] % len(dataset)]
@@ -276,15 +297,14 @@ def calc_distance_matrix_TMD(
     dataset: Dataset, dataset_name: str, **kwargs
 ) -> torch.Tensor:
     distance_matrix = torch.zeros(NUM_PAIR)
-    indices = np.random.RandomState(seed=0).permutation(len(dataset) * len(dataset))[
-        :NUM_PAIR
-    ]
+    indices = get_indices(dataset)
     ws = [
         None,
         [1 / 1],
         [1 / 2, 2 / 1],
         [1 / 3, 3 / 3, 3 / 1],
         [1 / 4, 4 / 6, 6 / 4, 4 / 1],
+        [1 / 5, 5 / 10, 10 / 10, 10 / 5, 5 / 1],
     ]
     for i in range(NUM_PAIR):
         g1 = dataset[indices[i] // len(dataset)]
@@ -311,7 +331,7 @@ def calc_distance_matrix(
     """
     dataset = load_dataset(dataset_name)
 
-    if metric == "WLLT" or metric == "WWLGK":
+    if metric in ["WLLT", "WWLGK", "WLOA"]:
         distance_matrix = calc_distance_matrix_WLLT_WWLGK(
             dataset, dataset_name, metric, **kwargs
         )
@@ -382,7 +402,9 @@ if __name__ == "__main__":
     )
     subparsers = parser.add_subparsers(dest="function")
     calc_parser = subparsers.add_parser("calc")
-    calc_parser.add_argument("--metric", choices=["WLLT", "WWLGK", "GED", "TMD"])
+    calc_parser.add_argument(
+        "--metric", choices=["WLLT", "WWLGK", "WLOA", "GED", "TMD"]
+    )
     calc_parser.add_argument("--depth", type=int, required=False)
     calc_parser.add_argument("--model", type=str, required=False)
     calc_parser.add_argument("--normalize", action="store_true", required=False)
@@ -395,25 +417,25 @@ if __name__ == "__main__":
             path = os.path.join(
                 DIS_MX_DIR,
                 args.dataset_name,
-                f"{args.metric}_d={args.depth}_{args.model}.pt",
+                f"fold0_{args.metric}_d={args.depth}_{args.model}.pt",
             )
-        elif args.metric == "WWLGK":
+        elif args.metric in ["WWLGK", "WLOA"]:
             path = os.path.join(
                 DIS_MX_DIR,
                 args.dataset_name,
-                f"{args.metric}_d={args.depth}.pt",
+                f"fold0_{args.metric}_d={args.depth}.pt",
             )
         elif args.metric == "GED":
             path = os.path.join(
                 DIS_MX_DIR,
                 args.dataset_name,
-                f"{args.metric}_t={args.timeout}.pt",
+                f"fold0_{args.metric}_t={args.timeout}.pt",
             )
         elif args.metric == "TMD":
             path = os.path.join(
                 DIS_MX_DIR,
                 args.dataset_name,
-                f"{args.metric}_d={args.depth}.pt",
+                f"fold0_{args.metric}_d={args.depth}.pt",
             )
         if not os.path.exists(os.path.dirname(path)):
             os.makedirs(os.path.dirname(path))
