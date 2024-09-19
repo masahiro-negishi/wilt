@@ -311,6 +311,9 @@ def train_wrapper(
     normalize: bool,
     seed: int,
     gnn: str,
+    n_mp_layers: int,
+    emb_dim: int,
+    pooling: str,
     gnn_distance: str,
     path: str,
     **kwargs,
@@ -324,6 +327,9 @@ def train_wrapper(
         normalize (bool): whether to normalize the distribution on WLLT
         seed (int): random seed
         gnn (str): GNN model
+        n_mp_layers (int): number of message passing layers
+        emb_dim (int): embedding dimension
+        pooling (str): pooling method
         gnn_distance (str): distance metric for GNN embeddings
         path (str): path to the directory to save the results
         **kwargs: additional arguments
@@ -344,7 +350,7 @@ def train_wrapper(
             GNN_DIR,
             f"{dataset_name}",
             f"{gnn}",
-            f"{depth-1}",
+            f"l={n_mp_layers}_p={pooling}_d={emb_dim}",
             f"fold0",
             f"dist_{gnn_distance}_last.pt",
         )
@@ -375,6 +381,9 @@ def train_wrapper(
         "normalize": normalize,
         "seed": seed,
         "gnn": gnn,
+        "n_mp_layers": n_mp_layers,
+        "emb_dim": emb_dim,
+        "pooling": pooling,
         "gnn_distance": gnn_distance,
         "tree_time": tree_end - tree_start,
         "loss_name": kwargs["loss_name"],
@@ -423,6 +432,9 @@ if __name__ == "__main__":
     parser.add_argument("--normalize", action="store_true")
     parser.add_argument("--seed", type=int)
     parser.add_argument("--gnn", choices=["gcn", "gin", "gat"])
+    parser.add_argument("--n_mp_layers", type=int)
+    parser.add_argument("--emb_dim", type=int)
+    parser.add_argument("--pooling", type=str, choices=["sum", "mean"])
     parser.add_argument("--gnn_distance", type=str, choices=["l1", "l2"])
     parser.add_argument("--loss_name", type=str, choices=["l1", "l2"])
     parser.add_argument("--absolute", action="store_true")
@@ -458,6 +470,7 @@ if __name__ == "__main__":
         RESULT_DIR,
         args.dataset_name,
         args.gnn,
+        f"l={args.n_mp_layers}_p={args.pooling}_d={args.emb_dim}",
         args.gnn_distance,
         f"d{args.depth}",
         f"{norm}_l={args.loss_name}_a={args.absolute}_l1={args.l1coeff}_b={args.batch_size}_e={args.n_epochs}_lr={args.lr}_c={args.clip_param_threshold}_s={args.seed}_e={args.embedding}",

@@ -56,14 +56,16 @@ def calc_distance_matrix_WLLT_WWLGK(
     if metric == "WLLT":
         l1coeff = kwargs["l1coeff"] if "l1coeff" in kwargs else 0.01
         gnn_distance = kwargs["gnn_distance"] if "gnn_distance" in kwargs else "l1"
+        normalize = "norm" if kwargs["normalize"] else "unnorm"
         tree.load_parameter(
             os.path.join(
                 RESULT_DIR,
                 dataset_name,
                 kwargs["model"],
+                f"l={kwargs['n_mp_layers']}_p={kwargs['pooling']}_d={kwargs['emb_dim']}",
                 gnn_distance,
                 f"d{kwargs['depth']}",
-                f"unnorm_l=l2_a=True_l1={l1coeff}_b=256_e=10_lr=0.01_c=0.0_s=0_e=tree",
+                f"{normalize}_l=l2_a=True_l1={l1coeff}_b=256_e=10_lr=0.01_c=0.0_s=0_e=tree",
                 "fold0",
                 "model_final.pt",
             )
