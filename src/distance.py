@@ -39,7 +39,7 @@ def get_indices(dataset: Dataset) -> np.ndarray:
     return indices_0 * n_samples + indices_1
 
 
-def calc_distance_matrix_WLLT_WWLGK(
+def calc_distance_matrix_WLLT_WLOA_WWLGK(
     dataset: Dataset, dataset_name, metric, **kwargs
 ) -> torch.Tensor:
     tree = WeisfeilerLemanLabelingTree(
@@ -62,7 +62,7 @@ def calc_distance_matrix_WLLT_WWLGK(
                 RESULT_DIR,
                 dataset_name,
                 kwargs["model"],
-                f"l={kwargs['n_mp_layers']}_p={kwargs['pooling']}_d={kwargs['emb_dim']}",
+                f"l={kwargs['n_mp_layers']}_p={kwargs['pooling']}_d={kwargs['emb_dim']}_s={kwargs['seed']}",
                 gnn_distance,
                 f"d{kwargs['depth']}",
                 f"{normalize}_l=l2_a=True_l1={l1coeff}_b=256_e=10_lr=0.01_c=0.0_s=0_e=tree",
@@ -334,7 +334,7 @@ def calc_distance_matrix(
     dataset = load_dataset(dataset_name)
 
     if metric in ["WLLT", "WWLGK", "WLOA"]:
-        distance_matrix = calc_distance_matrix_WLLT_WWLGK(
+        distance_matrix = calc_distance_matrix_WLLT_WLOA_WWLGK(
             dataset, dataset_name, metric, **kwargs
         )
     elif metric == "GED":
@@ -409,6 +409,7 @@ if __name__ == "__main__":
     )
     calc_parser.add_argument("--depth", type=int, required=False)
     calc_parser.add_argument("--model", type=str, required=False)
+    calc_parser.add_argument("--seed", type=int, required=False)
     calc_parser.add_argument("--normalize", action="store_true", required=False)
     calc_parser.add_argument("--timeout", type=int, required=False)
     compare_parser = subparsers.add_parser("compare")
@@ -419,7 +420,7 @@ if __name__ == "__main__":
             path = os.path.join(
                 DIS_MX_DIR,
                 args.dataset_name,
-                f"fold0_{args.metric}_d={args.depth}_{args.model}.pt",
+                f"fold0_{args.metric}_d={args.depth}_{args.model}_s={args.seed}.pt",
             )
         elif args.metric in ["WWLGK", "WLOA"]:
             path = os.path.join(
