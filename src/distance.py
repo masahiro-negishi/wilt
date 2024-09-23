@@ -4,11 +4,11 @@ import os
 
 import matplotlib.pyplot as plt  # type: ignore
 import networkx as nx  # type: ignore
-import numpy as np
+import numpy as np  # type: ignore
 import ot  # type: ignore
 import scipy as sp  # type: ignore
 import timeout_decorator  # type: ignore
-import torch
+import torch  # type: ignore
 from torch_geometric.data import Data, Dataset  # type: ignore
 from torch_geometric.datasets import ZINC, MoleculeNet, TUDataset  # type: ignore
 from torch_geometric.utils import to_networkx  # type: ignore
@@ -55,7 +55,7 @@ def calc_distance_matrix_WLLT_WLOA_WWLGK(
     )
     if metric == "WLLT":
         l1coeff = kwargs["l1coeff"] if "l1coeff" in kwargs else 0.01
-        gnn_distance = kwargs["gnn_distance"] if "gnn_distance" in kwargs else "l1"
+        gnn_distance = kwargs["gnn_distance"] if "gnn_distance" in kwargs else "l2"
         normalize = "norm" if kwargs["normalize"] else "unnorm"
         tree.load_parameter(
             os.path.join(
@@ -409,6 +409,11 @@ if __name__ == "__main__":
     )
     calc_parser.add_argument("--depth", type=int, required=False)
     calc_parser.add_argument("--model", type=str, required=False)
+    calc_parser.add_argument("--l1coeff", type=float, required=False)
+    calc_parser.add_argument("--gnn_distance", type=str, required=False)
+    calc_parser.add_argument("--n_mp_layers", type=int, required=False)
+    calc_parser.add_argument("--pooling", type=str, required=False)
+    calc_parser.add_argument("--emb_dim", type=int, required=False)
     calc_parser.add_argument("--seed", type=int, required=False)
     calc_parser.add_argument("--normalize", action="store_true", required=False)
     calc_parser.add_argument("--timeout", type=int, required=False)
@@ -417,10 +422,11 @@ if __name__ == "__main__":
     args = parser.parse_args()
     if args.function == "calc":
         if args.metric == "WLLT":
+            norm = "norm" if args.normalize else "unnorm"
             path = os.path.join(
                 DIS_MX_DIR,
                 args.dataset_name,
-                f"fold0_{args.metric}_d={args.depth}_{args.model}_s={args.seed}.pt",
+                f"fold0_{args.metric}_d={args.depth}_{norm}_{args.l1coeff}_{args.model}_{args.pooling}_s={args.seed}.pt",
             )
         elif args.metric in ["WWLGK", "WLOA"]:
             path = os.path.join(

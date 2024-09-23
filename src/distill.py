@@ -6,12 +6,12 @@ import time
 from typing import Optional
 
 import matplotlib.pyplot as plt  # type: ignore
-import numpy as np
-import torch
+import numpy as np  # type: ignore
+import torch  # type: ignore
 from scipy.optimize import nnls  # type: ignore
 from torch import nn
-from torch.optim import Adam
-from torch.utils.data import BatchSampler
+from torch.optim import Adam  # type: ignore
+from torch.utils.data import BatchSampler  # type: ignore
 from torch_geometric.data import Data, Dataset  # type: ignore
 from torch_geometric.datasets import ZINC, MoleculeNet, TUDataset  # type: ignore
 
@@ -267,7 +267,7 @@ def train_gd(
     plt.savefig(os.path.join(path, "loss.png"))
     plt.close()
 
-    # catter plots
+    # scatter plots
     (
         abs_mean,
         abs_std,
@@ -314,6 +314,7 @@ def train_wrapper(
     n_mp_layers: int,
     emb_dim: int,
     pooling: str,
+    gnn_seed: int,
     gnn_distance: str,
     path: str,
     **kwargs,
@@ -330,6 +331,7 @@ def train_wrapper(
         n_mp_layers (int): number of message passing layers
         emb_dim (int): embedding dimension
         pooling (str): pooling method
+        gnn_seed (int): random seed for GNN
         gnn_distance (str): distance metric for GNN embeddings
         path (str): path to the directory to save the results
         **kwargs: additional arguments
@@ -350,7 +352,7 @@ def train_wrapper(
             GNN_DIR,
             f"{dataset_name}",
             f"{gnn}",
-            f"l={n_mp_layers}_p={pooling}_d={emb_dim}",
+            f"l={n_mp_layers}_p={pooling}_d={emb_dim}_s={gnn_seed}",
             f"fold0",
             f"dist_{gnn_distance}_last.pt",
         )
@@ -384,6 +386,7 @@ def train_wrapper(
         "n_mp_layers": n_mp_layers,
         "emb_dim": emb_dim,
         "pooling": pooling,
+        "gnn_seed": gnn_seed,
         "gnn_distance": gnn_distance,
         "tree_time": tree_end - tree_start,
         "loss_name": kwargs["loss_name"],
@@ -435,6 +438,7 @@ if __name__ == "__main__":
     parser.add_argument("--n_mp_layers", type=int)
     parser.add_argument("--emb_dim", type=int)
     parser.add_argument("--pooling", type=str, choices=["sum", "mean"])
+    parser.add_argument("--gnn_seed", type=int)
     parser.add_argument("--gnn_distance", type=str, choices=["l1", "l2"])
     parser.add_argument("--loss_name", type=str, choices=["l1", "l2"])
     parser.add_argument("--absolute", action="store_true")
@@ -470,7 +474,7 @@ if __name__ == "__main__":
         RESULT_DIR,
         args.dataset_name,
         args.gnn,
-        f"l={args.n_mp_layers}_p={args.pooling}_d={args.emb_dim}",
+        f"l={args.n_mp_layers}_p={args.pooling}_d={args.emb_dim}_s={args.gnn_seed}",
         args.gnn_distance,
         f"d{args.depth}",
         f"{norm}_l={args.loss_name}_a={args.absolute}_l1={args.l1coeff}_b={args.batch_size}_e={args.n_epochs}_lr={args.lr}_c={args.clip_param_threshold}_s={args.seed}_e={args.embedding}",
