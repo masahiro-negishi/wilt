@@ -277,7 +277,7 @@ def train_gd(
 def train_wrapper(
     dataset_name: str,
     depth: int,
-    normalize: bool,
+    normalize: str,
     seed: int,
     gnn: str,
     n_mp_layers: int,
@@ -293,7 +293,7 @@ def train_wrapper(
     Args:
         dataset_name (str): dataset name
         depth (int): number of layers in the WILT
-        normalize (bool): whether to normalize the distribution on WILT
+        normalize (str): normalization method
         seed (int): random seed
         gnn (str): GNN model
         n_mp_layers (int): number of message passing layers
@@ -391,7 +391,7 @@ if __name__ == "__main__":
         ],
     )
     parser.add_argument("--depth", type=int)
-    parser.add_argument("--normalize", action="store_true")
+    parser.add_argument("--normalize", type=str, choices=["size", "dummy"])
     parser.add_argument("--seed", type=int)
     parser.add_argument("--gnn", choices=["gcn", "gin", "gat"])
     parser.add_argument("--n_mp_layers", type=int)
@@ -426,7 +426,6 @@ if __name__ == "__main__":
                     )
 
     kwargs = args.__dict__
-    norm = "norm" if args.normalize else "unnorm"
 
     kwargs["path"] = os.path.join(
         RESULT_DIR,
@@ -435,7 +434,7 @@ if __name__ == "__main__":
         f"l={args.n_mp_layers}_p={args.pooling}_d={args.emb_dim}_s={args.gnn_seed}",
         args.gnn_distance,
         f"d{args.depth}",
-        f"{norm}_l={args.loss_name}_l1={args.l1coeff}_b={args.batch_size}_e={args.n_epochs}_lr={args.lr}_c={args.clip_param_threshold}_s={args.seed}",
+        f"{args.normalize}_l={args.loss_name}_l1={args.l1coeff}_b={args.batch_size}_e={args.n_epochs}_lr={args.lr}_c={args.clip_param_threshold}_s={args.seed}",
     )
 
     if os.path.exists(os.path.join(kwargs["path"], "info.json")):

@@ -14,7 +14,7 @@ class WeisfeilerLemanLabelingTree:
     Attributes:
         depth (int): Number of layers in WILT
         exp_parameter (bool): Whether to set weight as exp(parameter)
-        norm (bool): Whether to normalize the distribution
+        norm (str): Normalization method. "size" or "dummy"
         n_nodes (int): Number of nodes in WILT
         parent (list[int]): Parent node of each node in WILT
         attr2label (dict[int, int]): Mapping from attribute to label (for layer 1)
@@ -52,7 +52,7 @@ class WeisfeilerLemanLabelingTree:
         data: Dataset,
         depth: int,
         exp_parameter: bool = True,
-        norm: bool = False,
+        norm: str = "dummy",
         edgelabel: Optional[bool] = None,
     ) -> None:
         """initialize WILT
@@ -61,7 +61,7 @@ class WeisfeilerLemanLabelingTree:
             data (Dataset): Dataset
             depth (int): Number of layers in WILT
             exp_parameter (bool, optional): Whether to set weight as exp(parameter). Defaults to True.
-            norm (bool, optional): Whether to normalize the distribution. Defaults to False.
+            norm (str, optional): Normalization method. "size" or "dummy". Defaults to "dummy".
             edgelabel (Optional[bool], optional): Whether to consider edge labels. If None, consider edge labels when data have them. Defaults to None.
         """
         self.depth = depth
@@ -303,8 +303,7 @@ class WeisfeilerLemanLabelingTree:
                 dist[self.labeling_hash[idx]] += 1
             current_labeling = new_labeling
         # normalize
-        # TODO: consider dist /= dist.sum()
-        if self.norm:
+        if self.norm == "size":
             dist /= graph.num_nodes
         return dist
 

@@ -43,15 +43,15 @@ def test_PairSampler(dataset_name: str, batch_size: int, train: bool):
 @pytest.mark.parametrize(
     "dataset_name, depth, normalize, seed, loss_name, l1coeff, batch_size, n_epochs, lr, save_interval, clip_param_threshold",
     [
-        ("MUTAG", 2, True, 0, "l1", 0.01, 32, 1, 0.01, 1, None),
-        ("MUTAG", 3, False, 42, "l2", 0, 16, 2, 0.01, 1, 0.0),
+        ("MUTAG", 2, "size", 0, "l1", 0.01, 32, 1, 0.01, 1, None),
+        ("MUTAG", 3, "dummy", 42, "l2", 0, 16, 2, 0.01, 1, 0.0),
     ],
 )
 def test_train_gd(
     tmpdir,
     dataset_name: str,
     depth: int,
-    normalize: bool,
+    normalize: str,
     seed: int,
     loss_name: str,
     l1coeff: float,
