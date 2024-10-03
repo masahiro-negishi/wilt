@@ -13,7 +13,6 @@ class WeisfeilerLemanLabelingTree:
 
     Attributes:
         depth (int): Number of layers in WILT
-        exp_parameter (bool): Whether to set weight as exp(parameter)
         norm (str): Normalization method. "size" or "dummy"
         n_nodes (int): Number of nodes in WILT
         parent (list[int]): Parent node of each node in WILT
@@ -51,7 +50,6 @@ class WeisfeilerLemanLabelingTree:
         self,
         data: Dataset,
         depth: int,
-        exp_parameter: bool = True,
         norm: str = "dummy",
         edgelabel: Optional[bool] = None,
     ) -> None:
@@ -60,12 +58,10 @@ class WeisfeilerLemanLabelingTree:
         Args:
             data (Dataset): Dataset
             depth (int): Number of layers in WILT
-            exp_parameter (bool, optional): Whether to set weight as exp(parameter). Defaults to True.
             norm (str, optional): Normalization method. "size" or "dummy". Defaults to "dummy".
             edgelabel (Optional[bool], optional): Whether to consider edge labels. If None, consider edge labels when data have them. Defaults to None.
         """
         self.depth = depth
-        self.exp_parameter = exp_parameter
         self.norm = norm
         assert self.depth > 0, "Depth should be greater than 0"
         if edgelabel is True:
@@ -413,18 +409,10 @@ class WeisfeilerLemanLabelingTree:
     ##############
     @property
     def weight(self) -> torch.Tensor:
-        if self.exp_parameter:
-            return torch.exp(self.parameter)
-        else:
-            return self.parameter
+        return self.parameter
 
     def reset_parameter(self) -> None:
-        if self.exp_parameter:
-            self.parameter: torch.Tensor = torch.zeros(
-                self.n_nodes, dtype=torch.float32
-            )
-        else:
-            self.parameter = torch.ones(self.n_nodes, dtype=torch.float32)
+        self.parameter = torch.ones(self.n_nodes, dtype=torch.float32)
 
     def load_parameter(self, path: str) -> None:
         self.parameter = torch.load(path)

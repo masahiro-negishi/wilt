@@ -106,12 +106,12 @@ def distance_scatter_plot(
     plt.rcParams["pdf.fonttype"] = 42
     plt.rcParams["text.usetex"] = True
     plt.scatter(preds, ys)
-    fitx = np.linspace(0, max(torch.max(preds).item(), torch.max(ys).item()), 100)
+    fitx = np.linspace(0, torch.max(preds).item(), 100)
     fity = coeff * fitx * (torch.max(ys).item() / torch.max(preds).item())
     plt.plot(fitx, fity, color="red")
     plt.xlabel(r"$d_\mathrm{WILT}$")
     plt.ylabel(r"$d_\mathrm{MPNN}$")
-    plt.title(f"RMSE: {rmse:.3f}")
+    plt.title(f"RMSE: {rmse:.3f}, coeff: {coeff:.3f}")
     plt.savefig(path)
     plt.close()
     return rmse, coeff
@@ -156,9 +156,7 @@ def train_gd(
     loss_fn = torch.nn.MSELoss()
     optimizer = Adam([tree.parameter], lr=lr)
 
-    # save the initial model
     os.makedirs(path, exist_ok=True)
-    torch.save(tree.parameter, os.path.join(path, f"model_0.pt"))
 
     # train the model
     loss_hist = []
