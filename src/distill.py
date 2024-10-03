@@ -144,7 +144,6 @@ def train_gd(
     tree: WeisfeilerLemanLabelingTree,
     seed: int,
     path: str,
-    loss_name: str,
     l1coeff: float,
     batch_size: int,
     n_epochs: int,
@@ -160,7 +159,6 @@ def train_gd(
         tree (WeisfeilerLemanLabelingTree): WILT
         seed (int): random seed
         path (str): path to the directory to save the results
-        loss_name (str): name of the loss function
         l1coeff (float): coefficient for L1 regularization
         batch_size (int): batch size
         n_epochs (int): number of epochs
@@ -182,10 +180,7 @@ def train_gd(
 
     # prepare sampler, loss function, and optimizer
     sampler = PairSampler(data, batch_size, distances, train=True)
-    if loss_name == "l1":
-        loss_fn: nn.Module = torch.nn.L1Loss()
-    elif loss_name == "l2":
-        loss_fn = torch.nn.MSELoss()
+    loss_fn = torch.nn.MSELoss()
     optimizer = Adam([tree.parameter], lr=lr)
 
     # save the initial model
@@ -330,7 +325,6 @@ def train_wrapper(
         tree,
         seed,
         os.path.join(path, f"fold0"),
-        kwargs["loss_name"],
         kwargs["l1coeff"],
         kwargs["batch_size"],
         kwargs["n_epochs"],
@@ -354,7 +348,6 @@ def train_wrapper(
         "gnn_seed": gnn_seed,
         "gnn_distance": gnn_distance,
         "tree_time": tree_end - tree_start,
-        "loss_name": kwargs["loss_name"],
         "l1coeff": kwargs["l1coeff"],
         "batch_size": kwargs["batch_size"],
         "n_epochs": kwargs["n_epochs"],
@@ -399,7 +392,6 @@ if __name__ == "__main__":
     parser.add_argument("--pooling", type=str, choices=["sum", "mean"])
     parser.add_argument("--gnn_seed", type=int)
     parser.add_argument("--gnn_distance", type=str, choices=["l1", "l2"])
-    parser.add_argument("--loss_name", type=str, choices=["l1", "l2"])
     parser.add_argument("--l1coeff", type=float)
     parser.add_argument("--batch_size", type=int)
     parser.add_argument("--n_epochs", type=int)
@@ -434,7 +426,7 @@ if __name__ == "__main__":
         f"l={args.n_mp_layers}_p={args.pooling}_d={args.emb_dim}_s={args.gnn_seed}",
         args.gnn_distance,
         f"d{args.depth}",
-        f"{args.normalize}_l={args.loss_name}_l1={args.l1coeff}_b={args.batch_size}_e={args.n_epochs}_lr={args.lr}_c={args.clip_param_threshold}_s={args.seed}",
+        f"{args.normalize}_l1={args.l1coeff}_b={args.batch_size}_e={args.n_epochs}_lr={args.lr}_c={args.clip_param_threshold}_s={args.seed}",
     )
 
     if os.path.exists(os.path.join(kwargs["path"], "info.json")):
