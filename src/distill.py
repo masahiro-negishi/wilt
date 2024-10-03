@@ -17,7 +17,7 @@ from torch_geometric.datasets import ZINC, MoleculeNet, TUDataset  # type: ignor
 
 from path import DATA_DIR, GNN_DIR, RESULT_DIR  # type: ignore
 from tree import WeisfeilerLemanLabelingTree
-from utils import load_dataset
+from utils import calc_rmse_wo_outliers, load_dataset
 
 
 class PairSampler(BatchSampler):
@@ -73,7 +73,7 @@ def distance_scatter_plot(
     sampler: PairSampler,
     subtree_weights: torch.Tensor,
     path: str,
-) -> tuple[float, ...]:
+) -> tuple:
     """scatter plot of (approximated distance, ground truth distance)
 
     Args:
@@ -81,6 +81,9 @@ def distance_scatter_plot(
         sampler (PairSampler): sampler for pairwise data
         subtree_weights (torch.Tensor): subtree weights
         path (str): path to save the plot
+
+    Returns:
+        tuple: RMSE(d_MPNN, d_WILT), coeff
     """
     tree.eval()
     ys_list = []
@@ -98,45 +101,20 @@ def distance_scatter_plot(
             break
     ys = torch.cat(ys_list)
     preds = torch.cat(preds_list)
-    abs_mean = torch.mean(torch.abs(preds - ys))
-    abs_std = torch.std(torch.abs(preds - ys))
-    abs_norm_mean = torch.mean(torch.abs(preds - ys) / torch.mean(ys))
-    abs_norm_std = torch.std(torch.abs(preds - ys) / torch.mean(ys))
-    rel_error = torch.abs(preds / ys - 1)
-    rel_error = rel_error[~torch.isnan(rel_error) & ~torch.isinf(rel_error)]
-    rel_mean = torch.mean(rel_error)
-    rel_std = torch.std(rel_error)
-    corr = torch.corrcoef(torch.stack([preds, ys], dim=0))
+    _, _, coeff, rmse = calc_rmse_wo_outliers(preds.numpy().copy(), ys.numpy().copy())
+    plt.rcParams["font.family"] = "Times New Roman"
+    plt.rcParams["pdf.fonttype"] = 42
+    plt.rcParams["text.usetex"] = True
     plt.scatter(preds, ys)
-    plt.plot(
-        range(int(max(torch.max(preds).item(), torch.max(ys).item()))),
-        range(int(max(torch.max(preds).item(), torch.max(ys).item()))),
-        color="red",
-    )
-    plt.xlabel("Prediction")
-    plt.ylabel("Ground truth")
-    plt.title(
-        "Abs: {:.3f}±{:.3f}, Abs(norm):{:.3f}±{:.3f},\n Rel: {:.3f}±{:.3f} Corr: {:.3f}".format(
-            abs_mean,
-            abs_std,
-            abs_norm_mean,
-            abs_norm_std,
-            rel_mean,
-            rel_std,
-            corr[0, 1].item(),
-        )
-    )
+    fitx = np.linspace(0, max(torch.max(preds).item(), torch.max(ys).item()), 100)
+    fity = coeff * fitx * (torch.max(ys).item() / torch.max(preds).item())
+    plt.plot(fitx, fity, color="red")
+    plt.xlabel(r"$d_\mathrm{WILT}$")
+    plt.ylabel(r"$d_\mathrm{MPNN}$")
+    plt.title(f"RMSE: {rmse:.3f}")
     plt.savefig(path)
     plt.close()
-    return (
-        float(abs_mean.item()),
-        float(abs_std.item()),
-        float(abs_norm_mean.item()),
-        float(abs_norm_std.item()),
-        float(rel_mean.item()),
-        float(rel_std.item()),
-        float(corr[0, 1].item()),
-    )
+    return rmse, coeff
 
 
 def train_gd(
@@ -151,7 +129,7 @@ def train_gd(
     save_interval: int,
     clip_param_threshold: Optional[float],
     distances: torch.Tensor,
-) -> float:
+) -> None:
     """train the model with gradient descent
 
     Args:
@@ -166,9 +144,6 @@ def train_gd(
         save_interval (int): How often to save the model
         clip_param_threshold (Optional[float]): threshold for clipping the parameter
         distances (torch.Tensor): distance matrix for training
-
-    Returns:
-        float: mean of absolute normalized error
     """
 
     # fix seed
@@ -233,15 +208,7 @@ def train_gd(
     plt.close()
 
     # scatter plots
-    (
-        abs_mean,
-        abs_std,
-        abs_norm_mean,
-        abs_norm_std,
-        rel_mean,
-        rel_std,
-        corr,
-    ) = distance_scatter_plot(
+    rmse, coeff = distance_scatter_plot(
         tree,
         sampler,
         subtree_weights,
@@ -252,21 +219,14 @@ def train_gd(
     info = {
         "epoch_time": epoch_time,
         "loss_history": loss_hist,
-        "abs_mean": abs_mean,
-        "abs_std": abs_std,
-        "abs_norm_mean": abs_norm_mean,
-        "abs_norm_std": abs_norm_std,
-        "rel_mean": rel_mean,
-        "rel_std": rel_std,
-        "corr": corr,
+        "rmse": str(rmse),
+        "coeff": str(coeff),
     }
     with open(os.path.join(path, "rslt.json"), "w") as f:
         json.dump(info, f)
 
     # save the model
     torch.save(tree.parameter, os.path.join(path, "model_final.pt"))
-
-    return abs_norm_mean
 
 
 def train_wrapper(
@@ -320,7 +280,7 @@ def train_wrapper(
             f"dist_{gnn_distance}_last.pt",
         )
     ).to(torch.float32)
-    train_abs_norm_mean = train_gd(
+    train_gd(
         data,
         tree,
         seed,
@@ -358,7 +318,6 @@ def train_wrapper(
             if kwargs["clip_param_threshold"] is not None
             else None
         ),
-        "train_abs_norm_mean": train_abs_norm_mean,
     }
     os.makedirs(path, exist_ok=True)
     with open(os.path.join(path, "info.json"), "w") as f:

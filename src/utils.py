@@ -42,7 +42,7 @@ def load_dataset(dataset_name: str) -> Dataset:
     return data
 
 
-def calc_rmse_wo_outliers(x1: torch.Tensor, y1: torch.Tensor) -> tuple:
+def calc_rmse_wo_outliers(x1: np.ndarray, y1: np.ndarray) -> tuple:
     x1 /= np.max(x1)
     y1 /= np.max(y1)
     c1 = np.sum(x1 * y1) / np.sum(x1**2)
