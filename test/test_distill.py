@@ -68,7 +68,6 @@ def test_train_gd(
     )
     train_gd(
         data,
-        "tree",
         tree,
         seed,
         str(tmpdir),

@@ -141,7 +141,6 @@ def distance_scatter_plot(
 
 def train_gd(
     data: Dataset,
-    embedding: str,
     tree: WeisfeilerLemanLabelingTree,
     seed: int,
     path: str,
@@ -159,7 +158,6 @@ def train_gd(
 
     Args:
         data (Dataset): training dataset
-        embedding (str): embedding method
         tree (WeisfeilerLemanLabelingTree): WILT
         seed (int): random seed
         path (str): path to the directory to save the results
@@ -199,29 +197,7 @@ def train_gd(
     # train the model
     loss_hist = []
     epoch_time: float = 0
-    if embedding == "tree":
-        subtree_weights = torch.stack(
-            [tree.calc_subtree_weights(g) for g in data], dim=0
-        )
-    elif embedding == "uniform":
-        subtree_weights = torch.rand(len(data), len(tree.parameter))
-    elif embedding == "sparse-uniform":
-        nonzero_prob = torch.count_nonzero(
-            torch.stack([tree.calc_subtree_weights(g) for g in data], dim=0)
-        ) / (len(data) * len(tree.parameter))
-        subtree_weights = torch.where(
-            torch.rand(len(data), len(tree.parameter)) < nonzero_prob,
-            torch.rand(len(data), len(tree.parameter)),
-            torch.zeros(len(data), len(tree.parameter)),
-        )
-    else:
-        subtree_weights = torch.stack(
-            [
-                tree.calc_subtree_weights(g)[torch.randperm(len(tree.parameter))]
-                for g in data
-            ],
-            dim=0,
-        )
+    subtree_weights = torch.stack([tree.calc_subtree_weights(g) for g in data], dim=0)
     for epoch in range(n_epochs):
         # training
         tree.train()
@@ -306,7 +282,6 @@ def train_gd(
 
 def train_wrapper(
     dataset_name: str,
-    embedding: str,
     depth: int,
     normalize: bool,
     seed: int,
@@ -323,7 +298,6 @@ def train_wrapper(
 
     Args:
         dataset_name (str): dataset name
-        embedding (str): embedding method
         depth (int): number of layers in the WILT
         normalize (bool): whether to normalize the distribution on WILT
         seed (int): random seed
@@ -359,7 +333,6 @@ def train_wrapper(
     ).to(torch.float32)
     train_abs_norm_mean = train_gd(
         data,
-        embedding,
         tree,
         seed,
         os.path.join(path, f"fold0"),
@@ -378,7 +351,6 @@ def train_wrapper(
     # save the training information
     info = {
         "dataset_name": dataset_name,
-        "embedding": embedding,
         "depth": depth,
         "normalize": normalize,
         "seed": seed,
@@ -426,11 +398,6 @@ if __name__ == "__main__":
             "ESOL",
         ],
     )
-    parser.add_argument(
-        "--embedding",
-        choices=["tree", "uniform", "sparse-uniform", "shuffle"],
-        default="tree",
-    )
     parser.add_argument("--depth", type=int)
     parser.add_argument("--normalize", action="store_true")
     parser.add_argument("--seed", type=int)
@@ -477,7 +444,7 @@ if __name__ == "__main__":
         f"l={args.n_mp_layers}_p={args.pooling}_d={args.emb_dim}_s={args.gnn_seed}",
         args.gnn_distance,
         f"d{args.depth}",
-        f"{norm}_l={args.loss_name}_a={args.absolute}_l1={args.l1coeff}_b={args.batch_size}_e={args.n_epochs}_lr={args.lr}_c={args.clip_param_threshold}_s={args.seed}_e={args.embedding}",
+        f"{norm}_l={args.loss_name}_a={args.absolute}_l1={args.l1coeff}_b={args.batch_size}_e={args.n_epochs}_lr={args.lr}_c={args.clip_param_threshold}_s={args.seed}",
     )
 
     if os.path.exists(os.path.join(kwargs["path"], "info.json")):
