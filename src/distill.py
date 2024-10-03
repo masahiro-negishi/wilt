@@ -145,7 +145,6 @@ def train_gd(
     seed: int,
     path: str,
     loss_name: str,
-    absolute: bool,
     l1coeff: float,
     batch_size: int,
     n_epochs: int,
@@ -162,7 +161,6 @@ def train_gd(
         seed (int): random seed
         path (str): path to the directory to save the results
         loss_name (str): name of the loss function
-        absolute (bool): whether to use absolute error
         l1coeff (float): coefficient for L1 regularization
         batch_size (int): batch size
         n_epochs (int): number of epochs
@@ -209,13 +207,9 @@ def train_gd(
             prediction = tree.calc_distance_between_subtree_weights(
                 left_weights, right_weights
             )
-            if absolute:
-                loss = loss_fn(prediction, y)
-            else:
-                loss = loss_fn(
-                    prediction / torch.clamp(y, min=1e-10), torch.ones(len(y))
-                )
-            loss += torch.sum(torch.abs(tree.parameter)) * l1coeff
+            loss = (
+                loss_fn(prediction, y) + torch.sum(torch.abs(tree.parameter)) * l1coeff
+            )
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
@@ -337,7 +331,6 @@ def train_wrapper(
         seed,
         os.path.join(path, f"fold0"),
         kwargs["loss_name"],
-        kwargs["absolute"],
         kwargs["l1coeff"],
         kwargs["batch_size"],
         kwargs["n_epochs"],
@@ -362,7 +355,6 @@ def train_wrapper(
         "gnn_distance": gnn_distance,
         "tree_time": tree_end - tree_start,
         "loss_name": kwargs["loss_name"],
-        "absolute": kwargs["absolute"],
         "l1coeff": kwargs["l1coeff"],
         "batch_size": kwargs["batch_size"],
         "n_epochs": kwargs["n_epochs"],
@@ -408,7 +400,6 @@ if __name__ == "__main__":
     parser.add_argument("--gnn_seed", type=int)
     parser.add_argument("--gnn_distance", type=str, choices=["l1", "l2"])
     parser.add_argument("--loss_name", type=str, choices=["l1", "l2"])
-    parser.add_argument("--absolute", action="store_true")
     parser.add_argument("--l1coeff", type=float)
     parser.add_argument("--batch_size", type=int)
     parser.add_argument("--n_epochs", type=int)
@@ -444,7 +435,7 @@ if __name__ == "__main__":
         f"l={args.n_mp_layers}_p={args.pooling}_d={args.emb_dim}_s={args.gnn_seed}",
         args.gnn_distance,
         f"d{args.depth}",
-        f"{norm}_l={args.loss_name}_a={args.absolute}_l1={args.l1coeff}_b={args.batch_size}_e={args.n_epochs}_lr={args.lr}_c={args.clip_param_threshold}_s={args.seed}",
+        f"{norm}_l={args.loss_name}_l1={args.l1coeff}_b={args.batch_size}_e={args.n_epochs}_lr={args.lr}_c={args.clip_param_threshold}_s={args.seed}",
     )
 
     if os.path.exists(os.path.join(kwargs["path"], "info.json")):
