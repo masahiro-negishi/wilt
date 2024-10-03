@@ -12,6 +12,7 @@ scikit-learn==1.4.2
 
 # For distance.py
 timeout_decorator==0.5.0
+scipy==1.13.1
 POT==0.9.3
 
 # For MoleculeNet
