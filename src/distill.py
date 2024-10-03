@@ -179,7 +179,7 @@ def train_gd(
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            tree.parameter.clamp(min=0)
+            tree.parameter.data = torch.clamp(tree.parameter, min=0)
             loss_sum += loss.item() * len(y)
             if (i + 1) % 1000 == 0:
                 print(f"Epoch {epoch+1}, Train batch {i + 1}/{len(sampler)}")
@@ -258,8 +258,8 @@ def train_wrapper(
     tree = WeisfeilerLemanLabelingTree(data, depth, normalize)
     tree_end = time.time()
 
-    if os.path.exists(os.path.join(path, f"fold0", "rslt.json")):
-        print(f"{os.path.join(path, f'fold0')} already exists")
+    if os.path.exists(os.path.join(path, "rslt.json")):
+        print(f"{path} already exists")
         raise ValueError("Already exists")
     distances = torch.load(
         os.path.join(
@@ -267,7 +267,6 @@ def train_wrapper(
             f"{dataset_name}",
             f"{gnn}",
             f"l={n_mp_layers}_p={pooling}_d={emb_dim}_s={gnn_seed}",
-            f"fold0",
             f"dist_{gnn_distance}_last.pt",
         )
     ).to(torch.float32)
@@ -275,7 +274,7 @@ def train_wrapper(
         data,
         tree,
         seed,
-        os.path.join(path, f"fold0"),
+        path,
         kwargs["l1coeff"],
         kwargs["batch_size"],
         kwargs["n_epochs"],
@@ -327,20 +326,22 @@ if __name__ == "__main__":
             "ESOL",
         ],
     )
-    parser.add_argument("--depth", type=int)
-    parser.add_argument("--normalize", type=str, choices=["size", "dummy"])
-    parser.add_argument("--seed", type=int)
+    # GNN
     parser.add_argument("--gnn", choices=["gcn", "gin", "gat"])
     parser.add_argument("--n_mp_layers", type=int)
     parser.add_argument("--emb_dim", type=int)
     parser.add_argument("--pooling", type=str, choices=["sum", "mean"])
     parser.add_argument("--gnn_seed", type=int)
     parser.add_argument("--gnn_distance", type=str, choices=["l1", "l2"])
+    # WILT
+    parser.add_argument("--depth", type=int)
+    parser.add_argument("--normalize", type=str, choices=["size", "dummy"])
+    parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--l1coeff", type=float)
-    parser.add_argument("--batch_size", type=int)
-    parser.add_argument("--n_epochs", type=int)
-    parser.add_argument("--lr", type=float)
-    parser.add_argument("--save_interval", type=int)
+    parser.add_argument("--batch_size", type=int, default=256)
+    parser.add_argument("--n_epochs", type=int, default=10)
+    parser.add_argument("--lr", type=float, default=0.01)
+    parser.add_argument("--save_interval", type=int, default=10)
 
     args = parser.parse_args()
     kwargs = args.__dict__
@@ -351,8 +352,7 @@ if __name__ == "__main__":
         args.gnn,
         f"l={args.n_mp_layers}_p={args.pooling}_d={args.emb_dim}_s={args.gnn_seed}",
         args.gnn_distance,
-        f"d{args.depth}",
-        f"{args.normalize}_l1={args.l1coeff}_b={args.batch_size}_e={args.n_epochs}_lr={args.lr}_s={args.seed}",
+        f"d={args.depth}_{args.normalize}_l1={args.l1coeff}",
     )
 
     if os.path.exists(os.path.join(kwargs["path"], "info.json")):
