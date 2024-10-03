@@ -12,17 +12,17 @@ class WeisfeilerLemanLabelingTree:
     """Weisfeiler Leman Labeling Tree
 
     Attributes:
-        depth (int): Number of layers in WLLT
+        depth (int): Number of layers in WILT
         exp_parameter (bool): Whether to set weight as exp(parameter)
         norm (bool): Whether to normalize the distribution
-        n_nodes (int): Number of nodes in WLLT
-        parent (list[int]): Parent node of each node in WLLT
+        n_nodes (int): Number of nodes in WILT
+        parent (list[int]): Parent node of each node in WILT
         attr2label (dict[int, int]): Mapping from attribute to label (for layer 1)
         labeling_hash (dict[tuple[int, tuple[int, ...]], int]): Hash table of labelings (for layer 1, layer 2, ..., layer depth)
-        parameter (torch.Tensor): Parameter of each edge in WLLT
+        parameter (torch.Tensor): Parameter of each edge in WILT
 
     Properties:
-        weight (torch.Tensor): Weight of each edge in WLLT
+        weight (torch.Tensor): Weight of each edge in WILT
 
     Structure:
         __init__
@@ -55,11 +55,11 @@ class WeisfeilerLemanLabelingTree:
         norm: bool = False,
         edgelabel: Optional[bool] = None,
     ) -> None:
-        """initialize WLLT
+        """initialize WILT
 
         Args:
             data (Dataset): Dataset
-            depth (int): Number of layers in WLLT
+            depth (int): Number of layers in WILT
             exp_parameter (bool, optional): Whether to set weight as exp(parameter). Defaults to True.
             norm (bool, optional): Whether to normalize the distribution. Defaults to False.
             edgelabel (Optional[bool], optional): Whether to consider edge labels. If None, consider edge labels when data have them. Defaults to None.
@@ -140,7 +140,7 @@ class WeisfeilerLemanLabelingTree:
         return adj_list
 
     def _build_tree(self, data) -> None:
-        """Build WLLT tree
+        """Build WILT tree
 
         Args:
             data (Dataset): Dataset
@@ -248,13 +248,13 @@ class WeisfeilerLemanLabelingTree:
     # distance calculation #
     ########################
     def calc_subtree_weights(self, graph: Data) -> torch.Tensor:
-        """calculate distribution on WLLT
+        """calculate distribution on WILT
 
         Args:
             graph (Data): graph
 
         Returns:
-            torch.Tensor: distribution on WLLT
+            torch.Tensor: distribution on WILT
         """
         dist = torch.zeros(self.n_nodes, dtype=torch.float32)
         current_labeling: list[int] = [-1 for _ in range(graph.num_nodes)]
@@ -313,7 +313,7 @@ class WeisfeilerLemanLabelingTree:
         weight1: torch.Tensor,
         weight2: torch.Tensor,
     ) -> torch.Tensor:
-        """calculate distance between two distributions on WLLT
+        """calculate distance between two distributions on WILT
 
         Args:
             weight1 (torch.Tensor): subtree_weight vector(s)
@@ -444,7 +444,7 @@ class WeisfeilerLemanLabelingTree:
         """get attribute of node
 
         Args:
-            node (int): node of WLLT
+            node (int): node of WILT
 
         Returns:
             int: attribute of node
@@ -468,7 +468,7 @@ class WeisfeilerLemanLabelingTree:
         """Unfolding tree visualization
 
         Args:
-            node (int): node of WLLT to unfold
+            node (int): node of WILT to unfold
             path (str): Path to save image
         """
         if node == 0:
@@ -533,16 +533,16 @@ class WeisfeilerLemanLabelingTree:
         plt.close()
 
     def color_unfolding_tree_in_graph(
-        self, node_wllt: int, graph: Data, path: str
+        self, node_wilt: int, graph: Data, path: str
     ) -> None:
         """Color unfolding tree in graph
 
         Args:
-            node_wllt (int): node of WLLT to unfold
+            node_wilt (int): node of WILT to unfold
             graph (Data): graph
             path (str): Path to the directory to save images
         """
-        if node_wllt == 0:
+        if node_wilt == 0:
             print("No corresponding unfolding tree for node 0")
             return
 
@@ -559,7 +559,7 @@ class WeisfeilerLemanLabelingTree:
             else graph.x.reshape(-1)
         ):
             current_labeling[node_idx] = self.attr2label[node_attr.item()]
-            if self.attr2label[node_attr.item()] == node_wllt:
+            if self.attr2label[node_attr.item()] == node_wilt:
                 root_candidate[node_idx] = True
                 root_depth = 1
         # adjancy_list
@@ -594,12 +594,12 @@ class WeisfeilerLemanLabelingTree:
                     ),
                 )
                 new_labeling[node_idx] = self.labeling_hash[idx]
-                if self.labeling_hash[idx] == node_wllt:
+                if self.labeling_hash[idx] == node_wilt:
                     root_candidate[node_idx] = True
                     root_depth = d
             current_labeling = new_labeling
         if root_depth == -1:
-            # no subgraph corresponding to node_wllt
+            # no subgraph corresponding to node_wilt
             return
 
         for root_idx in range(graph.num_nodes):

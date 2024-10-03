@@ -7,7 +7,7 @@ from torch_geometric.datasets import TUDataset  # type: ignore
 sys.path.append(os.path.join(os.path.dirname(__file__), "../src"))
 from path import DATA_DIR  # type: ignore
 from tree import WeisfeilerLemanLabelingTree  # type: ignore
-from visualize import visualize_graph, visualize_WLLT  # type: ignore
+from visualize import visualize_graph, visualize_WILT  # type: ignore
 
 
 @pytest.mark.parametrize(
@@ -21,11 +21,11 @@ from visualize import visualize_graph, visualize_WLLT  # type: ignore
         ("NCI1", 2, False),
     ],
 )
-def test_visualize_WLLT(tmpdir, dataset_name: str, depth: int, withweight: bool):
+def test_visualize_WILT(tmpdir, dataset_name: str, depth: int, withweight: bool):
     data = TUDataset(root=os.path.join(DATA_DIR, "TUDataset"), name=dataset_name)
     tree = WeisfeilerLemanLabelingTree(data, depth)
-    visualize_WLLT(tree, os.path.join(tmpdir, "test_visualize_WLLT.png"), withweight)
-    os.remove(os.path.join(tmpdir, "test_visualize_WLLT.png"))
+    visualize_WILT(tree, os.path.join(tmpdir, "test_visualize_WILT.png"), withweight)
+    os.remove(os.path.join(tmpdir, "test_visualize_WILT.png"))
 
 
 @pytest.mark.parametrize(

@@ -77,7 +77,7 @@ def distance_scatter_plot(
     """scatter plot of (approximated distance, ground truth distance)
 
     Args:
-        tree (WeisfeilerLemanLabelingTree): WLLT
+        tree (WeisfeilerLemanLabelingTree): WILT
         sampler (PairSampler): sampler for pairwise data
         subtree_weights (torch.Tensor): subtree weights
         path (str): path to save the plot
@@ -160,7 +160,7 @@ def train_gd(
     Args:
         data (Dataset): training dataset
         embedding (str): embedding method
-        tree (WeisfeilerLemanLabelingTree): WLLT
+        tree (WeisfeilerLemanLabelingTree): WILT
         seed (int): random seed
         path (str): path to the directory to save the results
         loss_name (str): name of the loss function
@@ -324,8 +324,8 @@ def train_wrapper(
     Args:
         dataset_name (str): dataset name
         embedding (str): embedding method
-        depth (int): number of layers in the WLLT
-        normalize (bool): whether to normalize the distribution on WLLT
+        depth (int): number of layers in the WILT
+        normalize (bool): whether to normalize the distribution on WILT
         seed (int): random seed
         gnn (str): GNN model
         n_mp_layers (int): number of message passing layers

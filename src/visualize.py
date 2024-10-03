@@ -8,13 +8,13 @@ from torch_geometric.data import Data  # type: ignore
 from tree import WeisfeilerLemanLabelingTree
 
 
-def visualize_WLLT(
+def visualize_WILT(
     tree: WeisfeilerLemanLabelingTree, path: str, withweight: bool = True
 ) -> None:
-    """visualize WLLT
+    """visualize WILT
 
     Args:
-        tree (WeisfeilerLemanLabelingTree): WLLT
+        tree (WeisfeilerLemanLabelingTree): WILT
         path (str): Path to save image
         withweight (bool, optional): Whether to show weight. Defaults to True.
     """
