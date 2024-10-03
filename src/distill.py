@@ -179,7 +179,7 @@ def train_gd(
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            tree.parameter.data = torch.clamp(tree.parameter, min=0)
+            tree.parameter.clamp(min=0)
             loss_sum += loss.item() * len(y)
             if (i + 1) % 1000 == 0:
                 print(f"Epoch {epoch+1}, Train batch {i + 1}/{len(sampler)}")
