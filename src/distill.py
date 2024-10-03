@@ -127,7 +127,6 @@ def train_gd(
     n_epochs: int,
     lr: float,
     save_interval: int,
-    clip_param_threshold: Optional[float],
     distances: torch.Tensor,
 ) -> None:
     """train the model with gradient descent
@@ -142,7 +141,6 @@ def train_gd(
         n_epochs (int): number of epochs
         lr (float): learning rate
         save_interval (int): How often to save the model
-        clip_param_threshold (Optional[float]): threshold for clipping the parameter
         distances (torch.Tensor): distance matrix for training
     """
 
@@ -183,10 +181,7 @@ def train_gd(
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            if clip_param_threshold is not None:
-                tree.parameter.data = torch.clamp(
-                    tree.parameter, min=clip_param_threshold
-                )
+            tree.parameter.data = torch.clamp(tree.parameter, min=0)
             loss_sum += loss.item() * len(y)
             if (i + 1) % 1000 == 0:
                 print(f"Epoch {epoch+1}, Train batch {i + 1}/{len(sampler)}")
@@ -262,9 +257,7 @@ def train_wrapper(
 
     data = load_dataset(dataset_name)
     tree_start = time.time()
-    tree = WeisfeilerLemanLabelingTree(
-        data, depth, kwargs["clip_param_threshold"] is None, normalize
-    )
+    tree = WeisfeilerLemanLabelingTree(data, depth, normalize)
     tree_end = time.time()
 
     if os.path.exists(os.path.join(path, f"fold0", "rslt.json")):
@@ -290,7 +283,6 @@ def train_wrapper(
         kwargs["n_epochs"],
         kwargs["lr"],
         kwargs["save_interval"],
-        kwargs["clip_param_threshold"],
         distances,
     )
     tree.reset_parameter()
@@ -313,11 +305,6 @@ def train_wrapper(
         "n_epochs": kwargs["n_epochs"],
         "lr": kwargs["lr"],
         "save_interval": kwargs["save_interval"],
-        "clip_param_threshold": (
-            float(kwargs["clip_param_threshold"])
-            if kwargs["clip_param_threshold"] is not None
-            else None
-        ),
     }
     os.makedirs(path, exist_ok=True)
     with open(os.path.join(path, "info.json"), "w") as f:
@@ -356,26 +343,8 @@ if __name__ == "__main__":
     parser.add_argument("--n_epochs", type=int)
     parser.add_argument("--lr", type=float)
     parser.add_argument("--save_interval", type=int)
-    parser.add_argument(
-        "--clip_param_threshold", type=str, required=False, default=None
-    )
 
     args = parser.parse_args()
-
-    if args.clip_param_threshold is not None:
-        if args.clip_param_threshold.lower() == "none":
-            args.clip_param_threshold = None
-        else:
-            try:
-                args.clip_param_threshold = float(args.clip_param_threshold)
-            except:
-                if args.clip_param_threshold == "smallest_normal":
-                    args.clip_param_threshold = np.finfo(np.float32).smallest_normal
-                else:
-                    raise ValueError(
-                        f"Invalid value for clip_param_threshold: {args.clip_param_threshold}"
-                    )
-
     kwargs = args.__dict__
 
     kwargs["path"] = os.path.join(
@@ -385,7 +354,7 @@ if __name__ == "__main__":
         f"l={args.n_mp_layers}_p={args.pooling}_d={args.emb_dim}_s={args.gnn_seed}",
         args.gnn_distance,
         f"d{args.depth}",
-        f"{args.normalize}_l1={args.l1coeff}_b={args.batch_size}_e={args.n_epochs}_lr={args.lr}_c={args.clip_param_threshold}_s={args.seed}",
+        f"{args.normalize}_l1={args.l1coeff}_b={args.batch_size}_e={args.n_epochs}_lr={args.lr}_s={args.seed}",
     )
 
     if os.path.exists(os.path.join(kwargs["path"], "info.json")):

@@ -41,10 +41,10 @@ def test_PairSampler(dataset_name: str, batch_size: int, train: bool):
 
 
 @pytest.mark.parametrize(
-    "dataset_name, depth, normalize, seed, l1coeff, batch_size, n_epochs, lr, save_interval, clip_param_threshold",
+    "dataset_name, depth, normalize, seed, l1coeff, batch_size, n_epochs, lr, save_interval",
     [
-        ("MUTAG", 2, "size", 0, 0.01, 32, 1, 0.01, 1, None),
-        ("MUTAG", 3, "dummy", 42, 0, 16, 2, 0.01, 1, 0.0),
+        ("MUTAG", 2, "size", 0, 0.01, 32, 1, 0.01, 1),
+        ("MUTAG", 3, "dummy", 42, 0, 16, 2, 0.01, 1),
     ],
 )
 def test_train_gd(
@@ -58,12 +58,9 @@ def test_train_gd(
     n_epochs: int,
     lr: float,
     save_interval: int,
-    clip_param_threshold: Optional[float],
 ):
     data = TUDataset(root=os.path.join(DATA_DIR, "TUDataset"), name=dataset_name)
-    tree = WeisfeilerLemanLabelingTree(
-        data, depth, clip_param_threshold is None, normalize
-    )
+    tree = WeisfeilerLemanLabelingTree(data, depth, normalize)
     train_gd(
         data,
         tree,
@@ -74,6 +71,5 @@ def test_train_gd(
         n_epochs,
         lr,
         save_interval,
-        clip_param_threshold,
         torch.ones(len(data), len(data)),
     )
