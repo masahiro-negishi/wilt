@@ -9,8 +9,6 @@ src/*
 !src/utils.py
 
 test/*
-!test/conftest.py
-!test/test_distances.py
 !test/test_distill.py
 !test/test_tree.py
 
