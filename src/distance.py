@@ -13,7 +13,7 @@ from torch_geometric.data import Data, Dataset  # type: ignore
 from torch_geometric.datasets import ZINC, MoleculeNet, TUDataset  # type: ignore
 from torch_geometric.utils import to_networkx  # type: ignore
 
-from path import DATA_DIR, DIS_MX_DIR, GNN_DIR, RESULT_DIR  # type: ignore
+from path import DATA_DIR, GNN_DIR, RESULT_DIR  # type: ignore
 from tree import WeisfeilerLemanLabelingTree  # type: ignore
 from utils import calc_rmse_wo_outliers, load_dataset  # type: ignore
 
@@ -366,7 +366,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     if args.metric == "WILT":
         path = os.path.join(
-            DIS_MX_DIR,
+            RESULT_DIR,
             args.dataset_name,
             args.gnn,
             f"l={args.n_mp_layers}_p={args.pooling}_d={args.emb_dim}_s={args.gnn_seed}",
@@ -381,7 +381,7 @@ if __name__ == "__main__":
         elif args.metric == "TMD":
             filepath = f"{args.metric}_d={args.depth}.pt"
         path = os.path.join(
-            DIS_MX_DIR,
+            RESULT_DIR,
             args.dataset_name,
             filepath,
         )
