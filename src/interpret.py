@@ -1,3 +1,4 @@
+import argparse
 import json
 import os
 
@@ -10,137 +11,133 @@ from path import DATA_DIR, GNN_DIR, RESULT_DIR
 from tree import WeisfeilerLemanLabelingTree
 from utils import load_dataset
 
-model = "gcn"
-embedding_dist = "l2"
-loss = "l2"
-coeff = 0.0001
-pooling = "mean"
-norm = "norm"
-seed = 1
 
-rslt_path = os.path.join(
-    RESULT_DIR,
-    "Mutagenicity",
-    f"{model}",
-    f"l=3_p={pooling}_d=64_s={seed}",
-    embedding_dist,
-    "d4",
-    f"{norm}_l={loss}_a=True_l1={coeff}_b=256_e=10_lr=0.01_c=0.0_s=0_e=tree",
-)
+def stat(dataset_name: str, labels: torch.Tensor, predictions: torch.Tensor) -> None:
+    if dataset_name in ["synthetic_bin", "Mutagenicity"]:
+        n_positive = torch.sum(labels == 1)
+        n_negative = torch.sum(labels == 0)
+        n_predicted_positive = torch.sum(predictions == 1)
+        n_predicted_negative = torch.sum(predictions == 0)
+        print(n_positive, n_negative, n_predicted_positive, n_predicted_negative)
+    elif dataset_name in ["synthetic_mul", "ENZYMES"]:
+        classes = torch.unique(labels)
+        n_classes = torch.tensor([torch.sum(labels == c) for c in classes])
+        n_predicted = torch.tensor([torch.sum(predictions == c) for c in classes])
+        print(n_classes, n_predicted)
+    else:
+        pass
 
-with open(os.path.join(rslt_path, "info.json")) as f:
-    info = json.load(f)
 
-data = load_dataset(info["dataset_name"])
-print(data[278])
-print(data[339])
-print(data[1233])
+def color_stat(
+    dataset_name: str,
+    color: int,
+    weight: float,
+    rank: int,
+    embeddings: torch.Tensor,
+    labels: torch.Tensor,
+    predictions: torch.Tensor,
+) -> None:
+    if dataset_name in ["synthetic_bin", "Mutagenicity"]:
+        print(
+            f"{color}: w={weight} r:{rank}\
+            p:{torch.sum(embeddings[labels==1][:,color]>0)}\
+            n:{torch.sum(embeddings[labels==0][:,color]>0)}\
+            pred_p:{torch.sum(embeddings[predictions==1][:,color]>0)}\
+            pred_n:{torch.sum(embeddings[predictions==0][:,color]>0)}"
+        )
+    elif dataset_name in ["synthetic_mul", "ENZYMES"]:
+        classes = torch.unique(labels)
+        print(
+            f"{color}: w={weight} r:{rank}\
+            label: {[torch.sum(embeddings[labels==i][:,color]>0).item() for i in range(len(classes))]}\
+            pred: {[torch.sum(embeddings[predictions==i][:,color]>0).item() for i in range(len(classes))]}"
+        )
+    else:
+        print(
+            f"{color}: w={weight}\
+            r:{rank}\
+            corr label:{torch.corrcoef(torch.stack([embeddings[:, color], labels], dim=0))[0, 1]}\
+            corr pred: {torch.corrcoef(torch.stack([embeddings[:, color], predictions], dim=0))[0, 1]}"
+        )
 
-tree = WeisfeilerLemanLabelingTree(data, int(info["depth"]), False, False)
-tree.load_parameter(os.path.join(rslt_path, "fold0", "model_final.pt"))
 
-sorted, indices = torch.sort(tree.weight, descending=True)
-embeddings = torch.stack([tree.calc_subtree_weights(g) for g in data], dim=0)
+def interpret(
+    dataset_name: str,
+    gnn: str,
+    n_mp_layers: int,
+    emb_dim: int,
+    pooling: str,
+    gnn_seed: int,
+    gnn_distance: str,
+    depth: int,
+    normalize: str,
+    l1coeff: float,
+):
+    rslt_path = os.path.join(
+        RESULT_DIR,
+        dataset_name,
+        gnn,
+        f"l={n_mp_layers}_p={pooling}_d={emb_dim}_s={gnn_seed}",
+        gnn_distance,
+        f"d={depth}_{normalize}_l1={l1coeff}",
+    )
+    with open(os.path.join(rslt_path, "info.json")) as f:
+        info = json.load(f)
 
-if info["dataset_name"] == "synthetic_bin" or info["dataset_name"] == "Mutagenicity":
-    n_positive = torch.sum(torch.tensor([g.y.item() for g in data]) == 1)
-    n_negative = torch.sum(torch.tensor([g.y.item() for g in data]) == 0)
+    data = load_dataset(dataset_name)
+    tree = WeisfeilerLemanLabelingTree(data, depth, normalize)
+    tree.load_parameter(os.path.join(rslt_path, "model_final.pt"))
+
+    sorted_weights, indices = torch.sort(tree.weight, descending=True)
+    embeddings = torch.stack([tree.calc_subtree_weights(g) for g in data], dim=0)
+
+    labels = torch.tensor([g.y.item() for g in data])
     predictions = torch.load(
         os.path.join(
             GNN_DIR,
-            info["dataset_name"],
-            model,
-            f"l=3_p={pooling}_d=64_s={seed}",
-            "fold0",
+            dataset_name,
+            gnn,
+            f"l=3_p={pooling}_d=64_s={gnn_seed}",
             "predictions.pt",
         )
     ).flatten()
-    n_predicted_positive = torch.sum(predictions == 1)
-    n_predicted_negative = torch.sum(predictions == 0)
-    print(n_positive, n_negative, n_predicted_positive, n_predicted_negative)
-    labels = torch.tensor([g.y.item() for g in data])
+    stat(dataset_name, labels, predictions)
 
-    os.makedirs(model, exist_ok=True)
+    os.makedirs(os.path.join(rslt_path, "interpr"), exist_ok=True)
     cnt = 0
     for idx, c in enumerate(indices):
-        # if torch.sum(embeddings[:, c] > 0) < 10:
         if torch.sum(embeddings[:, c] > 0) < len(data) * 0.01:
             continue
-        print(
-            f"{c.item()}: w={sorted[idx].item()}\
-            r:{idx+1}\
-            p:{torch.sum(embeddings[labels==1][:,c]>0)}\
-            n:{torch.sum(embeddings[labels==0][:,c]>0)}\
-            pred_p:{torch.sum(embeddings[predictions==1][:,c]>0)}\
-            pred_n:{torch.sum(embeddings[predictions==0][:,c]>0)}"
+        color_stat(
+            dataset_name,
+            c.item(),
+            sorted_weights[idx].item(),
+            idx + 1,
+            embeddings,
+            labels,
+            predictions,
         )
-        os.makedirs(f"{model}/{c}", exist_ok=True)
-        tree.unfolding_tree(c.item(), f"{model}/{c}/tree.png")
+        os.makedirs(os.path.join(rslt_path, "interpr", str(c.item())), exist_ok=True)
+        tree.unfolding_tree(
+            c.item(), os.path.join(rslt_path, "interpr", str(c.item()), "tree.png")
+        )
         g_cnt = 0
         for i in range(len(data)):
-            if torch.sum(embeddings[i]) > 30 * 4:
-                continue
+            # if torch.sum(embeddings[i]) > 30 * 4:
+            #     continue
             if embeddings[i, c] > 0:
-                os.makedirs(f"{model}/{c}/{i}_y={data[i].y}", exist_ok=True)
-                tree.color_unfolding_tree_in_graph(
-                    c, data[i], f"{model}/{c}/{i}_y={data[i].y}"
+                os.makedirs(
+                    os.path.join(
+                        rslt_path, "interpr", str(c.item()), f"{i}_y={data[i].y.item()}"
+                    ),
+                    exist_ok=True,
                 )
-                g_cnt += 1
-            if g_cnt >= 3:
-                break
-        cnt += 1
-        if cnt >= 20:
-            break
-
-    print(sorted[:100])
-
-    plt.hist(tree.weight.detach().numpy(), bins=100)
-    plt.savefig(f"{model}/weight.png")
-    print(
-        f"non zero: {torch.sum(tree.weight > 0)}, zero: {torch.sum(tree.weight == 0)}"
-    )
-elif info["dataset_name"] == "synthetic_mul" or info["dataset_name"] == "ENZYMES":
-    classes = torch.unique(torch.tensor([g.y.item() for g in data]))
-    n_classes = torch.tensor(
-        [torch.sum(torch.tensor([g.y.item() for g in data]) == c) for c in classes]
-    )
-    predictions = torch.load(
-        os.path.join(
-            GNN_DIR, info["dataset_name"], model, "3", "fold0", "predictions.pt"
-        )
-    ).flatten()
-    n_predicted = torch.tensor([torch.sum(predictions == c) for c in classes])
-    print(n_classes, n_predicted)
-    labels = torch.tensor([g.y.item() for g in data])
-
-    os.makedirs(model, exist_ok=True)
-    cnt = 0
-    for idx, c in enumerate(indices):
-        if torch.sum(embeddings[:, c] > 0) < 10:
-            continue
-        print(f"{c.item()}: w={sorted[idx].item()} r:{idx+1}")
-        print(
-            "label: ",
-            [
-                torch.sum(embeddings[labels == i][:, c] > 0).item()
-                for i in range(len(classes))
-            ],
-        )
-        print(
-            "pred: ",
-            [
-                torch.sum(embeddings[predictions == i][:, c] > 0).item()
-                for i in range(len(classes))
-            ],
-        )
-        os.makedirs(f"{model}/{c}", exist_ok=True)
-        tree.unfolding_tree(c.item(), f"{model}/{c}/tree.png")
-        g_cnt = 0
-        for i in range(len(data)):
-            if embeddings[i, c] > 0:
-                os.makedirs(f"{model}/{c}/{i}_y={data[i].y}", exist_ok=True)
                 tree.color_unfolding_tree_in_graph(
-                    c, data[i], f"{model}/{c}/{i}_y={data[i].y}"
+                    c.item(),
+                    data[i],
+                    os.path.join(
+                        rslt_path, "interpr", str(c.item()), f"{i}_y={data[i].y.item()}"
+                    ),
                 )
                 g_cnt += 1
             if g_cnt >= 3:
@@ -149,65 +146,42 @@ elif info["dataset_name"] == "synthetic_mul" or info["dataset_name"] == "ENZYMES
         if cnt >= 10:
             break
 
-    print(sorted[:100])
-
     plt.hist(tree.weight.detach().numpy(), bins=100)
-    plt.savefig(f"{model}/weight.png")
+    plt.savefig(os.path.join(rslt_path, "interpr", "weight.png"))
     print(
         f"non zero: {torch.sum(tree.weight > 0)}, zero: {torch.sum(tree.weight == 0)}"
     )
-else:
-    predictions = torch.load(
-        os.path.join(
-            GNN_DIR, info["dataset_name"], model, "3", "fold0", "predictions.pt"
-        )
-    ).flatten()
-    labels = torch.tensor([g.y.item() for g in data])
-    embeddings = torch.stack([tree.calc_subtree_weights(g) for g in data], dim=0)
 
-    os.makedirs(model, exist_ok=True)
-    cnt = 0
-    for idx, c in enumerate(indices):
-        if torch.sum(embeddings[:, c] > 0) < 10:
-            continue
-        counts = embeddings[:, c]
-        print(
-            f"{c.item()}: w={sorted[idx].item()}\
-            r:{idx+1}\
-            corr label:{torch.corrcoef(torch.stack([counts, labels], dim=0))[0, 1]}\
-            corr pred: {torch.corrcoef(torch.stack([counts, predictions], dim=0))[0, 1]}"
-        )
-        os.makedirs(f"{model}/{c}", exist_ok=True)
-        tree.unfolding_tree(c.item(), f"{model}/{c}/tree.png")
-        plt.scatter(counts, labels)
-        plt.savefig(f"{model}/{c}/scatter.png")
-        plt.close()
-        g_cnt = 0
-        for i in range(len(data)):
-            if embeddings[i, c] > 0:
-                os.makedirs(f"{model}/{c}/{i}", exist_ok=True)
-                tree.color_unfolding_tree_in_graph(c, data[i], f"{model}/{c}/{i}")
-                g_cnt += 1
-            if g_cnt >= 3:
-                break
-        cnt += 1
-        if cnt >= 10:
-            break
 
-    print(
-        f"0: w={tree.weight[0]}\
-        r: ?\
-        corr label:{torch.corrcoef(torch.stack([embeddings[:, 0], labels], dim=0))[0, 1]}\
-        corr pred: {torch.corrcoef(torch.stack([embeddings[:, 0], predictions], dim=0))[0, 1]}"
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--dataset_name",
+        choices=[
+            "MUTAG",
+            "Mutagenicity",
+            "NCI1",
+            "ENZYMES",
+            "synthetic_bin",
+            "synthetic_mul",
+            "synthetic_reg",
+            "ZINC",
+            "Lipo",
+            "ESOL",
+        ],
     )
-    tree.unfolding_tree(0, f"{model}/0.png")
-    plt.scatter(embeddings[:, 0], labels)
-    plt.savefig(f"{model}/0_scatter.png")
-    plt.close()
-    print(sorted[:100])
+    # GNN
+    parser.add_argument("--gnn", choices=["gcn", "gin", "gat"])
+    parser.add_argument("--n_mp_layers", type=int)
+    parser.add_argument("--emb_dim", type=int)
+    parser.add_argument("--pooling", type=str, choices=["sum", "mean"])
+    parser.add_argument("--gnn_seed", type=int)
+    parser.add_argument("--gnn_distance", type=str, choices=["l1", "l2"])
+    # WILT
+    parser.add_argument("--depth", type=int)
+    parser.add_argument("--normalize", type=str, choices=["size", "dummy"])
+    parser.add_argument("--l1coeff", type=float)
 
-    plt.hist(tree.weight.detach().numpy(), bins=100)
-    plt.savefig(f"{model}/weight.png")
-    print(
-        f"non zero: {torch.sum(tree.weight > 0)}, zero: {torch.sum(tree.weight == 0)}"
-    )
+    args = parser.parse_args()
+    kwargs = args.__dict__
+    interpret(**kwargs)
