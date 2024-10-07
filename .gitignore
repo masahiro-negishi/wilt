@@ -12,9 +12,20 @@ test/*
 !test/test_distill.py
 !test/test_tree.py
 
+gnn/*
+!gnn/Mutagenicity/
+gnn/Mutagenicity/*
+!gnn/Mutagenicity/gcn/
+gnn/Mutagenicity/gcn/*
+!gnn/Mutagenicity/gcn/l=3_p=sum_d=64_s=1/
+gnn/Mutagenicity/gcn/l=3_p=sum_d=64_s=1/*
+!gnn/Mutagenicity/gcn/l=3_p=sum_d=64_s=1/dist_l2_last.pt
+!gnn/Mutagenicity/gcn/l=3_p=sum_d=64_s=1/info.json
+!gnn/Mutagenicity/gcn/l=3_p=sum_d=64_s=1/predictions.pt
+!gnn/Mutagenicity/gcn/l=3_p=sum_d=64_s=1/results.json
+
 data/
 expt/
-gnn/
 rslt/
 
 __pycache__/
