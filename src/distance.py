@@ -371,7 +371,8 @@ if __name__ == "__main__":
             args.gnn,
             f"l={args.n_mp_layers}_p={args.pooling}_d={args.emb_dim}_s={args.gnn_seed}",
             args.gnn_distance,
-            f"{args.metric}_d={args.depth}_{args.normalize}_l1={args.l1coeff}.pt",
+            f"d={args.depth}_{args.normalize}_l1={args.l1coeff}",
+            "WILT.pt",
         )
     else:
         if args.metric in ["WWL", "WLOA"]:
