@@ -31,7 +31,7 @@ For VSCode users, you can open this repo with wilt.code-workspace after installi
 - ms-python.mypy-type-checker
 
 ## Run experiments
-#### 1. Distillation
+### 1. Distillation
 Distilling pretrained MPNN to WILT.
 
 E.g.) Distilling a GCN(3-layer, embdim=64, sum pooling, seed=1) trained on Mutagenicity to WILT(depth=4, dummy normalization, l1 coefficient=0.1). The distance between the GNN embeddings is the L2 (Euclidean) distance.
@@ -39,10 +39,15 @@ E.g.) Distilling a GCN(3-layer, embdim=64, sum pooling, seed=1) trained on Mutag
 python src/distill.py --dataset_name Mutagenicity --gnn gcn --n_mp_layers 3 --emb_dim 64 --pooling sum --gnn_seed 1 gnn_distance l2 --depth 4 --normalize dummy --l1coeff 0.1
 ```
 
-#### 2. Interpretation
+### 2. Interpretation
 Visualizing the weight distribution and graphs with highlighted subgraphs corresponding to the largest WL colors.
 
 E.g.) Interpreting WILT from the example above.
 ```
 python src/interpret.py --dataset_name Mutagenicity --gnn gcn --n_mp_layers 3 --emb_dim 64 --pooling sum --gnn_seed 1 gnn_distance l2 --depth 4 --normalize dummy --l1coeff 0.1
+```
+
+### 3. Reproduce figures
+```
+python paper/figures.py
 ```
