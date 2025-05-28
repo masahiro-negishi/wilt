@@ -39,6 +39,7 @@ rslt/*/*/*/l2/*
 rslt/*/*/*/l2/*/*
 !rslt/*/gcn/*/l2/*l1=0.0/WILT.pt
 !rslt/Mutagenicity/gcn/*p=sum*/l2/*dummy*/model_final.pt
+!rslt/Mutagenicity/gcn/*p=sum*/l2/*dummy*/WILT.pt
 
 
 !rslt/*/*/*p=sum*s=0/l2/*dummy*l1=0.0/model_final.pt
