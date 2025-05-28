@@ -4,6 +4,7 @@ import numpy as np
 import torch
 from torch_geometric.data import Data, Dataset  # type: ignore
 from torch_geometric.datasets import ZINC, MoleculeNet, TUDataset  # type: ignore
+from torch_geometric.transforms import Constant
 
 from path import DATA_DIR
 
@@ -37,6 +38,12 @@ def load_dataset(dataset_name: str) -> Dataset:
                 Data(x=newx, edge_attr=newe, edge_index=d.edge_index, y=d.y)
             )
         data = converted
+    elif dataset_name in ["IMDB-BINARY", "COLLAB"]:
+        data = TUDataset(
+            root=os.path.join(DATA_DIR, "TUDataset"),
+            name=dataset_name,
+            pre_transform=Constant(),
+        )
     else:
         data = TUDataset(root=os.path.join(DATA_DIR, "TUDataset"), name=dataset_name)
     return data

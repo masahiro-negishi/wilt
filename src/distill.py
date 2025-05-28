@@ -318,6 +318,8 @@ if __name__ == "__main__":
             "Mutagenicity",
             "NCI1",
             "ENZYMES",
+            "IMDB-BINARY",
+            "COLLAB",
             "synthetic_bin",
             "synthetic_mul",
             "synthetic_reg",
