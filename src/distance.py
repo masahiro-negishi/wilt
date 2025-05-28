@@ -116,10 +116,10 @@ def calc_distance_matrix_GED(dataset: Dataset, **kwargs) -> torch.Tensor:
             call_ged(g1, g2)
         except:
             pass
-        if ANS == -1:
-            raise ValueError
         distance_matrix[i] = ANS
-        print(i, ANS)
+    distance_matrix[distance_matrix == -1] = distance_matrix[
+        distance_matrix != -1
+    ].mean()
     return distance_matrix
 
 
@@ -324,7 +324,6 @@ def calc_distance_matrix(
         **kwargs: additional arguments
     """
     dataset = load_dataset(dataset_name)
-
     if metric in ["WILT", "WWL", "WLOA"]:
         distance_matrix = calc_distance_matrix_WILT_WLOA_WWL(
             dataset, dataset_name, metric, **kwargs
