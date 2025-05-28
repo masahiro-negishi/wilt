@@ -3,19 +3,15 @@ import json
 import os
 import random
 import time
-from typing import Optional
 
 import matplotlib.pyplot as plt  # type: ignore
 import numpy as np  # type: ignore
 import torch  # type: ignore
-from scipy.optimize import nnls  # type: ignore
-from torch import nn
 from torch.optim import Adam  # type: ignore
 from torch.utils.data import BatchSampler  # type: ignore
-from torch_geometric.data import Data, Dataset  # type: ignore
-from torch_geometric.datasets import ZINC, MoleculeNet, TUDataset  # type: ignore
+from torch_geometric.data import Dataset  # type: ignore
 
-from path import DATA_DIR, GNN_DIR, RESULT_DIR  # type: ignore
+from path import GNN_DIR, RESULT_DIR  # type: ignore
 from tree import WeisfeilerLemanLabelingTree
 from utils import calc_rmse_wo_outliers, load_dataset
 

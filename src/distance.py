@@ -2,20 +2,17 @@ import argparse
 import copy
 import os
 
-import matplotlib.pyplot as plt  # type: ignore
 import networkx as nx  # type: ignore
 import numpy as np  # type: ignore
 import ot  # type: ignore
-import scipy as sp  # type: ignore
 import timeout_decorator  # type: ignore
 import torch  # type: ignore
 from torch_geometric.data import Data, Dataset  # type: ignore
-from torch_geometric.datasets import ZINC, MoleculeNet, TUDataset  # type: ignore
 from torch_geometric.utils import to_networkx  # type: ignore
 
-from path import DATA_DIR, GNN_DIR, RESULT_DIR  # type: ignore
+from path import RESULT_DIR  # type: ignore
 from tree import WeisfeilerLemanLabelingTree  # type: ignore
-from utils import calc_rmse_wo_outliers, load_dataset  # type: ignore
+from utils import load_dataset  # type: ignore
 
 NUM_PAIR = 1000
 

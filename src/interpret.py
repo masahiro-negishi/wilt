@@ -4,10 +4,8 @@ import os
 
 import matplotlib.pyplot as plt  # type: ignore
 import torch  # type: ignore
-from torch_geometric.data import Data  # type: ignore
-from torch_geometric.datasets import ZINC, MoleculeNet, TUDataset  # type: ignore
 
-from path import DATA_DIR, GNN_DIR, RESULT_DIR
+from path import GNN_DIR, RESULT_DIR
 from tree import WeisfeilerLemanLabelingTree
 from utils import load_dataset
 
